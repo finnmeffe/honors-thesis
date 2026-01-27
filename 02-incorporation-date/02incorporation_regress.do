@@ -1,4 +1,4 @@
-cd "C:\Users\phynm\OneDrive\Desktop\school\thesis\iv incorporation date"
+cd ""
 clear
 
 use muni_incorporation
@@ -21,6 +21,10 @@ destring main_state, replace
 xtset main_state
 
 collapse (mean) `varlist', by(cbsa_code)
+
+////////////////
+*main regression
+////////////////
 
 eststo m2: quietly regress hhi_pop yr_incorp_main, absorb(main_state)
 eststo m3: quietly regress hhi_pop yr_incorp_main log_pop max_decade, absorb(main_state)
@@ -62,6 +66,7 @@ restore
 ////////////////////
 *nonparametric tests
 ////////////////////
+
 preserve 
 drop if tot_pop < 100000
 eststo m1: quietly npregress kernel hhi_pop yr_incorp_main
@@ -93,7 +98,7 @@ eststo m3: quietly regress hhi_pop yr_incorp_main log_pop pct_black post_1900, a
 esttab, se ar2
 
 //////////////
-*SUMMARY STATS
+*summary stats
 //////////////
 
 clear
@@ -147,3 +152,4 @@ outreg2 using sum_stats, replace tex sum(log) label
 restore 
 
 distinct cbsa_code
+
