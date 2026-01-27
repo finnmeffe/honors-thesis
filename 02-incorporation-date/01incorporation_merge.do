@@ -1,4 +1,4 @@
-cd "C:\Users\phynm\OneDrive\Desktop\school\thesis\iv incorporation date"
+cd ""
 
 /////////////////////////
 *MERGING DATASETS
@@ -82,7 +82,7 @@ save muni_incorporation.dta, replace
 
 *get detailed population statistics
 clear
-import delimited "C:\Users\phynm\OneDrive\Desktop\school\thesis\iv incorporation date\cbsa-est2024-alldata-char.csv"
+import delimited "cbsa-est2024-alldata-char.csv"
 
 drop if agegrp != 0
 drop agegrp
@@ -155,5 +155,6 @@ drop tag distinct_states
 
 *generate racial characteristics
 by cbsa_code: generate pct_black = (bac_female + bac_male) / tot_pop 
+
 
 save muni_incorporation.dta, replace
