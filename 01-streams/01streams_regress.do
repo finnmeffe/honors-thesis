@@ -1,7 +1,5 @@
-cd "C:\Users\phynm\OneDrive\Desktop\school\thesis\iv streams"
+cd ""
 clear
-
-*ssc install reghdfe
 
 use cbsa_streams
 
@@ -50,3 +48,4 @@ esttab m1 m3 m2 m4 using stream_iv.tex, ///
         suffix(})) ///
     stats(statefe r2 N, labels("State FE" "R-squared" "Observations")) ///
 	replace
+
