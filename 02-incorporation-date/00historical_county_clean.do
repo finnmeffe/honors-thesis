@@ -1,4 +1,4 @@
-cd "C:\Users\phynm\OneDrive\Desktop\school\thesis\iv incorporation date"
+cd ""
 
 clear
 
@@ -86,5 +86,6 @@ foreach var of varlist pctchg_* {
 
     replace max_decade = `endyear' if `var' == max_growth
 }
+
 
 save historical_county_populations, replace
