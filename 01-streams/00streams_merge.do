@@ -1,4 +1,4 @@
-cd "C:\Users\phynm\OneDrive\Desktop\school\thesis\iv streams"
+cd "C"
 clear
 
 /////////////////////////////////////
@@ -78,3 +78,4 @@ replace state = substr(state, 1, 2)
 drop len_state
 
 save cbsa_streams, replace
+
