@@ -1,0 +1,6 @@
+"0","knitr::opts_chunk$set(echo = TRUE)"
+"0","options(scipen = 0, digits = 3)  # controls base R output`"
+"0","if(!require('pacman')) {"
+"0","  install.packages('pacman')"
+"0","}"
+"0","pacman::p_load(ggplot2, dplyr, tidyverse, data.table, lubridate, ggpubr, skimr, scales, plotly, tidycensus, readxl, httr, jsonlite, glue, sf, mapview, tigris, crsuggest, lwgeom, spatstat, patchwork) "
