@@ -1,5 +1,0 @@
-"0","sf.places <- sf.places %>% "
-"0","  mutate(pct_area = re_area/sum(re_area))"
-"0",""
-"0","index_circ <- sum(sf.places$diff_circ * sf.places$pct_area)"
-"0","index_rect <- sum(sf.places$diff_rect * sf.places$pct_area)"

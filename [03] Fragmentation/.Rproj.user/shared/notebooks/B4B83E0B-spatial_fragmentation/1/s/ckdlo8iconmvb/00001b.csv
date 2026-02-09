@@ -1,8 +1,0 @@
-"0",""
-"0","p3 = ggplot() +"
-"0","  geom_sf(data = sf.places, aes(fill = diff_rect))"
-"0",""
-"0","p4 = ggplot() +"
-"0","  geom_sf(data = sf.places, aes(fill = diff_circ))"
-"0",""
-"0","p3 + p4"
