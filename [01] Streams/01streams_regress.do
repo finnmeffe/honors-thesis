@@ -1,4 +1,4 @@
-cd ""
+cd "C:\Users\phynm\OneDrive\Documents\GitHub\honors-thesis/[01] Streams/data"
 clear
 
 use cbsa_streams
