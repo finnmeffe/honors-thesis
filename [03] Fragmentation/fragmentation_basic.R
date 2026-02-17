@@ -15,7 +15,7 @@ cog_2022_muni <- cog_2022 %>%
 # read in crosswalk 
 xwalk.cbsa_fips <- read_csv("https://data.nber.org/cbsa-csa-fips-county-crosswalk/2023/cbsa2fipsxw_2023.csv") %>% 
   mutate(fullfips = paste0(fipsstatecode, fipscountycode)) %>% 
-  select(cbsacode,fullfips)
+  select(cbsacode,cbsatitle,fullfips)
 
 cog_2022_muni <- cog_2022_muni %>% 
   inner_join(xwalk.cbsa_fips, by = join_by(fips == fullfips))
@@ -32,6 +32,7 @@ hhi <- function(col) {
 cog_2022_sum <- cog_2022_muni %>% 
   group_by(cbsacode) %>% 
   summarise(num_counties = n_unique(fips_county),
+            cbsatitle = first(cbsatitle),
             num_munis = n_unique(fips_place[unit_type == "2 - MUNICIPAL"]),
             num_local = n_unique(fips_place),
             pop_muni = sum(population[unit_type == "2 - MUNICIPAL"]),
