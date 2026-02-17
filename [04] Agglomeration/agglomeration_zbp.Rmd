@@ -1,0 +1,150 @@
+---
+title: "THESIS WORKFILE"
+output: html_document
+date: "2026-01-21"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(scipen = 0, digits = 3)  
+if(!require('pacman')) {
+  install.packages('pacman')
+}
+pacman::p_load(ggplot2, dplyr, tidyverse, data.table, lubridate, ggpubr, skimr, scales, plotly, tidycensus, readxl, httr, jsonlite, sf, mapview, tigris, lehdr) 
+```
+
+## ZBP Assembly
+
+### Crosswalk Creation
+
+Initialize by creating a set of crosswalk files to ensure ZIP-CBSA-County compatibility
+
+```{r}
+# use constant cbsa-county pairs over time
+
+xwalk.cbsa_fips <- read_csv("https://data.nber.org/cbsa-csa-fips-county-crosswalk/2023/cbsa2fipsxw_2023.csv") %>% 
+  mutate(fullfips = paste0(fipsstatecode, fipscountycode))
+
+hud_key <- "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiI2IiwianRpIjoiOTkyMTgyZTJhMjMzYWIxYjg4ZTg0ZWNhNzc4YTgxZmUyZjBiMjI2YjBjN2I1Nzc2MDExZWE0NjQyMWYyMGVjMjM4M2U5MzVjOTQwNDQ2MGQiLCJpYXQiOjE3NjI1Mzg0NTEuMTcxNzA0LCJuYmYiOjE3NjI1Mzg0NTEuMTcxNzM4LCJleHAiOjIwNzgwNzEyNTEuMTU2ODU1LCJzdWIiOiIxMTI2MDMiLCJzY29wZXMiOltdfQ.VUVEmcDRysXhP5os4E3v9J4HrcFU10lycZShAQszZBUwyujCIMoFK_5WbKbKMRvvN9GJ_-mF3eJ_QcnIGuLGWg"
+hud_url <- "https://www.huduser.gov/hudapi/public/usps"
+
+# use type = 7 for county -> zip, 8 for cbsa -> zip
+
+response <- httr::GET(hud_url, 
+                      query = list(type = 2, query = "ALL", year = 2017),
+                      add_headers(Authorization = paste("Bearer", hud_key))
+)
+
+stop_for_status(response)
+json_data <- httr::content(response, as = "text", encoding = "UTF-8")
+df <- jsonlite::fromJSON(json_data)
+zip_county <- as.data.frame(df)
+
+response <- httr::GET(hud_url, 
+                      query = list(type = 3, query = "ALL", year = 2017),
+                      add_headers(Authorization = paste("Bearer", hud_key))
+)
+
+stop_for_status(response)
+json_data <- httr::content(response, as = "text", encoding = "UTF-8")
+df <- jsonlite::fromJSON(json_data)
+cbsa_zip <- as.data.frame(df)
+rm(df, json_data, response)
+
+# extract appropriate columns from both xwalks. preserve business ratio
+
+xwalk.zip_county <- zip_county %>% 
+  rename(zip = data.results.zip,
+         county = data.results.geoid,
+         bus_ratio = data.results.bus_ratio) %>% 
+  select(county, zip, bus_ratio)
+
+xwalk.zip_cbsa <- cbsa_zip %>% 
+  rename(cbsa = data.results.geoid,
+         zip = data.results.zip,
+         bus_ratio = data.results.bus_ratio) %>% 
+  select(cbsa, zip, bus_ratio)
+
+# check the distribution: most are 0 or 100
+
+#ggplot() + 
+  #geom_histogram(data = xwalk.zip_county, aes(x = bus_ratio))
+```
+
+### Data Pull
+
+Now pull County Business Patterns data. I use 2019 data for easier compatibility with other Census products. Pulling from an API tends to be slower than the manual download, which is available here: https://www.census.gov/data/datasets/2019/econ/cbp/2019-cbp.html, though I include a function to download as well.
+
+```{r}
+get_zbp_detail <- function(year) {
+  base <- "https://www2.census.gov/programs-surveys/cbp/datasets"
+  url  <- sprintf("%s/%s/zbp%02ddetail.zip", base, year, year %% 100)
+
+  tmp_zip <- tempfile(fileext = ".zip")
+  tmp_dir <- tempfile()
+
+  download.file(url, tmp_zip, mode = "wb")
+  unzip(tmp_zip, exdir = tmp_dir)
+
+  txt_file <- list.files(tmp_dir, pattern = "\\.txt$", full.names = TRUE)
+
+  df <- read_csv(txt_file, show_col_types = FALSE)
+
+  # Clean up
+  unlink(tmp_zip)
+  unlink(tmp_dir, recursive = TRUE)
+
+  df
+}
+
+zbp_2019 <- get_zbp_detail(2019)
+
+# other option
+# zbp.2019 <- read_csv("[04] Agglomeration/raw data/zbp19detail.txt")
+
+names(zbp_2019)
+
+#zbp_inspect <- zbp_23 %>% 
+#  filter(zip == "01001") %>% 
+#  filter(grepl("-", naics) == FALSE) %>% 
+#  filter(grepl("/", naics) == FALSE) %>% 
+#  summarise(count = sum(est))
+
+zbp_2019_wide <- zbp_2019 %>% 
+  select(-c(city, stabbr, cty_name)) %>% 
+  mutate(across(`n<5`:`n1000`, ~ replace_na(as.numeric(.x), 0))) %>% 
+  pivot_longer(
+    cols = `est`:`n1000`,
+    names_to = "emp_desc",
+    values_to = "emp"
+  ) %>% 
+  inner_join(xwalk.zip_county, by = join_by(zip == zip)) %>% 
+  arrange(bus_ratio)
+
+test <- zbp_2019_wide %>% 
+  filter(bus_ratio != 1) %>% 
+  filter(bus_ratio != 0) %>% 
+  arrange(zip, naics)
+
+summary(zbp_2019_wide)
+```
+
+Now we can pull out data for specific industries from the ZBP data. This first run will use "Scientific Research and Development Services" as an example.
+
+```{r}
+# NAICS codes beginning with 5417. 
+
+zbp.2019.research <- zbp.2019.wide %>% 
+  filter(naics == "5417//",
+         emp_desc == "est")
+
+geo.zcta <- zctas(
+  cb = TRUE,
+  year = 2019,
+)
+
+geo.zcta.research <- geo.zcta %>% 
+  left_join(zbp.2019.research, by = join_by(ZCTA5CE10 == zip)) %>% 
+  filter(!is.na(emp))
+
+# mapview(geo.zcta.research)
