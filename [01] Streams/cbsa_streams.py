@@ -1,12 +1,19 @@
 import geopandas as gpd
 import pandas as pd
+import matplotlib.pyplot as plt
+import os
 
-# stream shapes from ESRI; cbsa shapes from census
-streams = gpd.read_file("Streams.shp")
-cbsa = gpd.read_file("tl_2025_us_cbsa.shp")
+# set main crs
+target_crs = "5070"
 
-target_crs = "EPSG:5070"
+# stream shapes from ESRI, download here: https://www.arcgis.com/home/item.html?id=8206e517c2264bb39b4a0780462d5be1
+streams_path = r"C:\Users\phynm\OneDrive\Desktop\school\thesis\[01] IV - Streams\shapefiles\Streams.shp"
+streams = gpd.read_file(streams_path)
 streams = streams.to_crs(target_crs)
+
+# cbsa shapes from US Census, download here: https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.html
+cbsa_path = r"C:\Users\phynm\OneDrive\Desktop\school\thesis\[01] IV - Streams\shapefiles\tl_2025_us_cbsa.shp"
+cbsa = gpd.read_file(cbsa_path)
 cbsa = cbsa.to_crs(target_crs)
 
 streams_cbsa = gpd.overlay(streams, cbsa, how="intersection")
@@ -25,8 +32,12 @@ cbsa_with_streams["stream_length_meters"].fillna(0, inplace=True)
 cbsa_with_streams["stream_length_miles"].fillna(0, inplace=True)
 cbsa_with_streams["area_m2"] = cbsa_with_streams.geometry.area
 
-cbsa_with_streams.to_file("cbsa_with_streams.shp")  # or GeoJSON, etc.
-cbsa_with_streams.drop(columns="geometry").to_csv("cbsa_streams_summary.csv", index=False)
+output_dir = "data"
+if not os.path.exists(output_dir):
+    os.makedirs(output_dir)
 
+output_path = os.path.join(output_dir, "cbsa_streams.csv")
+
+cbsa_with_streams.drop(columns="geometry").to_csv(output_path, index=False)
 
 print(cbsa_with_streams.head())
