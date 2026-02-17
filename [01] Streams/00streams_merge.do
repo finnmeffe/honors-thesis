@@ -60,12 +60,12 @@ save ruggedness, replace
 clear
 
 import delimited "https://data.nber.org/cbsa-csa-fips-county-crosswalk/2023/cbsa2fipsxw_2023.csv"
+gen fipsstate = string(fipsstatecode, "%02.0f")
+gen fipscounty = string(fipscountycode, "%03.0f")
+gen fips_state_county = fipsstate + fipscounty
+keep cbsacode cbsatitle fips_state_county
 
-use county_cbsa_xwalk
-keep cbsa_code fips_state_county
-rename cbsa_code cbsacode
-
-merge 1:1 fips_state_county using raw_ruggedness
+merge 1:1 fips_state_county using ruggedness
 drop if _merge != 3
 drop _merge fips_state_county
 collapse (mean) mean_areatri (mean) sd_areatri, by(cbsacode)
@@ -75,8 +75,9 @@ merge 1:1 cbsacode using cbsa_streams
 drop if _merge != 3
 drop _merge
 
-order cbsacode cbsatitle num_* total_population hhi_population 
+order cbsacode num_* pop_* hhi_*
 gen streams_per_area = stream_length_meters / aland
+erase ruggedness.dta
 save cbsa_streams, replace
 
 ////////////////////////////
