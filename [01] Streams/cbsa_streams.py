@@ -1,6 +1,8 @@
+# This file constructs a CBSA-indexed aggregate of stream lengths to use as the instrument in the first
+# stage of the regression
+
 import geopandas as gpd
 import pandas as pd
-import matplotlib.pyplot as plt
 import os
 
 # set main crs
