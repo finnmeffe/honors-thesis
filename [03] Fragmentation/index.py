@@ -1,6 +1,9 @@
 import pandas as pd
 
-df = pd.read_excel("C:/Users/phynm/OneDrive/Desktop/school/thesis/municipalities_with_cbsa.xlsx")
+# download the 2022 Census of Governments Data
+
+df = pd.read_excel("data/Govt_Units_2022_Final.xlsx")
+print(df.head())
 
 muni_count = (
     df[df["unit_type"] == ('2 - MUNICIPAL' or '3 - TOWNSHIP')]
