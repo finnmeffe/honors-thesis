@@ -27,12 +27,18 @@ hhi <- function(col) {
   return(result)
 } 
 
+# separate out these for townships vs municipalities
+
 cog_2022_sum <- cog_2022_muni %>% 
   group_by(cbsacode) %>% 
   summarise(num_counties = n_unique(fips_county),
-            num_munis = n_unique(fips_place),
-            pop = sum(population),
-            hhi_pop = hhi(population)
+            num_munis = n_unique(fips_place[unit_type == "2 - MUNICIPAL"]),
+            num_local = n_unique(fips_place),
+            pop_muni = sum(population[unit_type == "2 - MUNICIPAL"]),
+            pop_total = sum(population),
+            hhi_pop_muni = hhi(population[unit_type == "2 - MUNICIPAL"]),
+            hhi_pop_total = hhi(population),
   )
 
 write.csv(cog_2022_sum, file = "data/fragmentation_basic.csv", row.names=FALSE)
+
