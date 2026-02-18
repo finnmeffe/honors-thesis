@@ -1,5 +1,5 @@
 ---
-title: "THESIS WORKFILE"
+title: "Agglomeration - ZBP"
 output: html_document
 date: "2026-01-21"
 ---
@@ -87,10 +87,9 @@ get_zbp_detail <- function(year) {
   unzip(tmp_zip, exdir = tmp_dir)
 
   txt_file <- list.files(tmp_dir, pattern = "\\.txt$", full.names = TRUE)
-
   df <- read_csv(txt_file, show_col_types = FALSE)
 
-  # Clean up
+  # clean up
   unlink(tmp_zip)
   unlink(tmp_dir, recursive = TRUE)
 
@@ -118,13 +117,14 @@ zbp_2019_wide <- zbp_2019 %>%
     names_to = "emp_desc",
     values_to = "emp"
   ) %>% 
-  inner_join(xwalk.zip_county, by = join_by(zip == zip)) %>% 
-  arrange(bus_ratio)
+  inner_join(xwalk.zip_cbsa, by = join_by(zip == zip)) %>% 
+  rename(bus_ratio_cbsa = bus_ratio)
 
-test <- zbp_2019_wide %>% 
-  filter(bus_ratio != 1) %>% 
-  filter(bus_ratio != 0) %>% 
-  arrange(zip, naics)
+# relationships will be many to many since there is occasionally overlap for zip codes between counties/cbsas. above code is set for cbsas, but can also look at specific counties
+
+#zbp_2019_wide_county <- zbp_2019_wide %>% 
+#  inner_join(xwalk.zip_county, by = join_by(zip == zip)) %>%
+#  rename(bus_ratio_county = bus_ratio)
 
 summary(zbp_2019_wide)
 ```
@@ -134,7 +134,7 @@ Now we can pull out data for specific industries from the ZBP data. This first r
 ```{r}
 # NAICS codes beginning with 5417. 
 
-zbp.2019.research <- zbp.2019.wide %>% 
+zbp_2019_research <- zbp_2019_wide %>% 
   filter(naics == "5417//",
          emp_desc == "est")
 
@@ -143,8 +143,43 @@ geo.zcta <- zctas(
   year = 2019,
 )
 
-geo.zcta.research <- geo.zcta %>% 
-  left_join(zbp.2019.research, by = join_by(ZCTA5CE10 == zip)) %>% 
+geo.zcta_research <- geo.zcta %>% 
+  left_join(zbp_2019_research, by = join_by(ZCTA5CE10 == zip)) %>% 
   filter(!is.na(emp))
 
 # mapview(geo.zcta.research)
+```
+
+Check the pull for a specific CBSA to ensure it's fully functional. One can also adjust the filtered city to provide a mapview for CBSAs that may interest them.
+
+```{r}
+geo.zcta_spec <- geo.zcta_research %>% 
+  filter(cbsa == "14460")
+
+mapview(geo.zcta_spec, zcol = "emp")
+```
+
+### Constructing metrics
+
+The first ZBP metric will be a firm-based HHI, which is much less computationally complex than the Ripley L calculation from LODES blocks. This will give a rough approximation of how concentrated industry-level activity is across the US.
+
+```{r}
+# get adjusted employment by bus_ratio
+
+zbp_2019_research <- zbp_2019_research %>% 
+  mutate(adj_emp = emp * bus_ratio_cbsa)
+
+get_hhi <- function(emp_col) {
+  total = sum(emp_col)
+  shares = emp_col/total
+  result = sum(shares^2)
+  result
+}
+
+zbp_2019_re_sum <- zbp_2019_research %>% 
+  group_by(cbsa) %>% 
+  summarise(hhi = get_hhi(adj_emp),
+            total_emp = sum(adj_emp)) %>% 
+  filter(total_emp > 100)
+```
+
