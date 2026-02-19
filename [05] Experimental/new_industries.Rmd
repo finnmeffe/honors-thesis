@@ -1,0 +1,60 @@
+---
+title: "new_industry"
+output: html_document
+date: "2026-02-07"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(scipen = 0, digits = 3)  # controls base R output`
+if(!require('pacman')) {
+  install.packages('pacman')
+}
+pacman::p_load(ggplot2, dplyr, tidyverse, data.table, lubridate, ggpubr, skimr, scales, plotly, tidycensus, readxl, httr, jsonlite, sf, mapview, tigris, lehdr, glue, vctrs, purrr) 
+```
+
+```{r}
+get_zbp_detail <- function(year) {
+  base <- "https://www2.census.gov/programs-surveys/cbp/datasets"
+  url  <- sprintf("%s/%s/zbp%02ddetail.zip", base, year, year %% 100)
+
+  tmp_zip <- tempfile(fileext = ".zip")
+  tmp_dir <- tempfile()
+
+  download.file(url, tmp_zip, mode = "wb")
+  unzip(tmp_zip, exdir = tmp_dir)
+
+  txt_file <- list.files(tmp_dir, pattern = "\\.txt$", full.names = TRUE)
+
+  df <- read_csv(txt_file, show_col_types = FALSE)
+
+  # Clean up
+  unlink(tmp_zip)
+  unlink(tmp_dir, recursive = TRUE)
+
+  df
+}
+
+years <- 2010:2020
+
+for (yr in years) {
+  df <- get_zbp_detail(yr)
+  outname <- sprintf("zbp_%d_detail.txt", yr)
+  readr::write_csv(df, outname)
+}
+```
+```{r}
+zbp_list <- map(
+  years,
+  ~ read_csv(sprintf("zbp_%d_detail.txt", .x)) %>%
+      mutate(year = .x)
+)
+```
+
+```{r}
+zbp_all <- zbp_list %>% 
+  lapply(mutate, across(everything(), as.character))  %>% 
+  bind_rows()
+
+```
+
