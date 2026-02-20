@@ -10,7 +10,8 @@ options(scipen = 0, digits = 6)
 if(!require('pacman')) {
   install.packages('pacman')
 }
-pacman::p_load(ggplot2, dplyr, tidyverse, data.table, lubridate, ggpubr, skimr, scales, plotly, tidycensus, readxl, httr, jsonlite, sf, mapview, tigris, lehdr, spatstat, crsuggest, dbmss) 
+pacman::p_load(ggplot2, dplyr, tidyverse, data.table, lubridate, ggpubr, skimr, scales, plotly, tidycensus, readxl, httr, jsonlite, sf, mapview, tigris, lehdr, spatstat, crsuggest, dbmss, stargazer) 
+setwd("~/Github/honors-thesis/[04] Agglomeration")
 ```
 
 ## Data Assembly
@@ -198,6 +199,24 @@ zbp_2019_ind <- naics_to_hhi(naics_codes)
 ggplot(data = zbp_2019_ind, aes(x = total_emp, y = hhi)) +
   geom_point()
 ```
+
+```{r}
+setwd("~/Github/honors-thesis/[03] Fragmentation")
+df.frag = read_csv("data/fragmentation_basic.csv") %>% 
+  mutate(cbsacode = as.character(cbsacode))
+
+df.reg <- inner_join(
+  df.frag, zbp_2019_ind, by = join_by(cbsacode == cbsa)
+)
+
+reg.model1 <- lm(hhi ~ num_munis, data = df.reg)
+reg.model2 <- lm(hhi ~ num_munis + pop_muni, data = df.reg)
+stargazer(reg.model1, reg.model2, type = "text")
+ggplot(data = df.reg, aes(x = num_munis, y = hhi)) +
+  geom_point()
+```
+
+
 
 ### LODES Blocks
 
