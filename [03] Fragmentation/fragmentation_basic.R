@@ -39,6 +39,7 @@ cog_2022_sum <- cog_2022_muni %>%
             pop_total = sum(population),
             hhi_pop_muni = hhi(population[unit_type == "2 - MUNICIPAL"]),
             hhi_pop_total = hhi(population),
+            munis_pp = num_munis / pop_muni
   )
 
 write.csv(cog_2022_sum, file = "data/fragmentation_basic.csv", row.names=FALSE)
