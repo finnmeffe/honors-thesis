@@ -6,14 +6,14 @@ date: "2026-01-21"
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-options(scipen = 0, digits = 3)  
+options(scipen = 0, digits = 6)  
 if(!require('pacman')) {
   install.packages('pacman')
 }
-pacman::p_load(ggplot2, dplyr, tidyverse, data.table, lubridate, ggpubr, skimr, scales, plotly, tidycensus, readxl, httr, jsonlite, sf, mapview, tigris, lehdr) 
+pacman::p_load(ggplot2, dplyr, tidyverse, data.table, lubridate, ggpubr, skimr, scales, plotly, tidycensus, readxl, httr, jsonlite, sf, mapview, tigris, lehdr, spatstat, crsuggest, dbmss) 
 ```
 
-## ZBP Assembly
+## Data Assembly
 
 ### Crosswalk Creation
 
@@ -71,7 +71,7 @@ xwalk.zip_cbsa <- cbsa_zip %>%
   #geom_histogram(data = xwalk.zip_county, aes(x = bus_ratio))
 ```
 
-### Data Pull
+### ZBP Data Pull
 
 Now pull County Business Patterns data. I use 2019 data for easier compatibility with other Census products. Pulling from an API tends to be slower than the manual download, which is available here: https://www.census.gov/data/datasets/2019/econ/cbp/2019-cbp.html, though I include a function to download as well.
 
@@ -159,27 +159,112 @@ geo.zcta_spec <- geo.zcta_research %>%
 mapview(geo.zcta_spec, zcol = "emp")
 ```
 
-### Constructing metrics
+## Constructing metrics
+
+### ZBP HHI
 
 The first ZBP metric will be a firm-based HHI, which is much less computationally complex than the Ripley L calculation from LODES blocks. This will give a rough approximation of how concentrated industry-level activity is across the US.
 
 ```{r}
+# input codes here 
+naics_codes = c(5112,5161,5181,5182,5415) %>% 
+  as.character() %>% 
+  str_pad(6, "right", "/")
+
 # get adjusted employment by bus_ratio
 
-zbp_2019_research <- zbp_2019_research %>% 
-  mutate(adj_emp = emp * bus_ratio_cbsa)
-
-get_hhi <- function(emp_col) {
+naics_to_hhi <- function(naics_vec) {
+  code_filter <- zbp_2019_wide %>% 
+    filter(naics %in% naics_vec,
+           emp_desc == "est") %>% 
+    mutate(adj_emp = emp * bus_ratio_cbsa)
+  
+  get_hhi <- function(emp_col) {
   total = sum(emp_col)
   shares = emp_col/total
   result = sum(shares^2)
   result
+  }
+  
+  code_filter <- code_filter %>% 
+    group_by(cbsa) %>% 
+    summarise(hhi = get_hhi(adj_emp),
+              total_emp = sum(adj_emp)) %>% 
+    filter(total_emp > 100)
 }
 
-zbp_2019_re_sum <- zbp_2019_research %>% 
-  group_by(cbsa) %>% 
-  summarise(hhi = get_hhi(adj_emp),
-            total_emp = sum(adj_emp)) %>% 
-  filter(total_emp > 100)
+zbp_2019_ind <- naics_to_hhi(naics_codes)
+
+ggplot(data = zbp_2019_ind, aes(x = total_emp, y = hhi)) +
+  geom_point()
+```
+
+### LODES Blocks
+
+Directly grab the LODES data
+
+```{r}
+df.lodes <- grab_lodes(
+  "wa",
+  2019,
+  version = "LODES7",
+  lodes_type = "wac",
+  job_type = "JT00",
+  segment = "S000",
+  agg_geo = "block",
+  use_cache = TRUE
+)
+```
+
+Perform statistical analysis on the enriched LODES points
+
+```{r}
+get_block_points <- function(cbsacode) {
+  x <- xwalk.cbsa_fips %>%
+    filter(cbsacode == {{ cbsacode }}) %>%
+    select(fipsstatecode, fipscountycode) %>%
+    distinct()
+
+  counties_by_state <- split(x$fipscountycode, x$fipsstatecode)
+
+  purrr::imap(counties_by_state, ~ blocks(
+      state = .y,
+      county = .x,
+      year = 2010,
+      progress_bar = FALSE
+    )) %>%
+    bind_rows() %>%
+    st_centroid()
+  }
+
+geo.block_points <- get_block_points(42660)
+
+# use projected geometry
+crs <- suggest_top_crs(geo.block_points)
+geo.block_points <- geo.block_points %>% 
+  st_transform(crs) %>% 
+  mutate(x = st_coordinates(geo.block_points)[,1],
+         y = st_coordinates(geo.block_points)[,2]) %>% 
+  select(GEOID10,x,y) %>% 
+  st_drop_geometry() %>% 
+  inner_join(df.lodes, by = join_by(GEOID10 == w_geocode))
+
+my_wmppp <- wmppp(
+  data.frame(
+    X           = geo.block_points$x,
+    Y           = geo.block_points$y,
+    PointType   = "Block",
+    PointWeight = geo.block_points$CNS12
+  ),
+  window = owin(
+    xrange = range(geo.block_points$x),
+    yrange = range(geo.block_points$y)
+  )
+)
+
+result <- Lest(my_wmppp, correction = "Ripley")
+
+ggplot() +
+  geom_line(data = result, aes(x = r, y = iso))
 ```
 
