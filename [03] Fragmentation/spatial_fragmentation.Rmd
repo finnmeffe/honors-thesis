@@ -331,6 +331,8 @@ plot_places()
 
 ## Top 100 MSAs
 
+Run this chunk to calculate metro-wide scores for each of the top 100 MSAs by population.
+
 ```{r}
 # get the top 100 MSAs by population
 df.frag_index <- read_csv("data/fragmentation_basic.csv") %>% 
@@ -348,5 +350,82 @@ ggplot(data = df.frag_index, aes(x = hhi_pop_total, y = index_rect)) +
   geom_smooth(method = "lm")
 
 plot_places(14460)
+
+write.csv(df.frag_index, file = "data/fragmentation_top_100.csv", row.names = FALSE)
+```
+
+I also perform an analysis that centers on the "central cities" of each CBSA (as defined by Census naming conventions, though this can be restructured to just include the largest city in each CBSA).
+
+```{r}
+df.central <- df.frag_index %>%
+  mutate(cities = str_extract(cbsatitle, "^[^,]+"),
+         cbsacode = as.character(cbsacode)) %>% 
+  select(cbsacode,cities) %>% 
+  separate_longer_delim(cities, "-") %>% 
+  filter(str_trim(cities) != "") %>% 
+  left_join(xwalk.cbsa_county %>% 
+  select(cbsacode,fipsstatecode) %>% 
+  unique()
+  , by = "cbsacode", relationship = "many-to-many")
+
+sf.central <- inner_join(
+  sf.nat_places, df.central, by = join_by(NAME == cities, STATEFP == fipsstatecode)
+) %>% 
+  group_by(cbsacode, NAME) %>%
+  slice_max(st_area(geometry), n = 1, with_ties = FALSE) %>%
+  ungroup()
+
+# Redundant code from before, don't need to call function because of limited total places
+
+needed_crs <- suggest_crs(sf.central) %>% 
+  filter(crs_units == "m") %>% 
+  pull(crs_code) %>% 
+  first()
+
+sf.central <- st_transform(sf.central, as.numeric(needed_crs)) %>% 
+  group_by(GEOID) %>%
+  summarise(across(-geometry, first),
+    geometry = st_union(geometry), .groups = "drop")
+
+sf.central_buffers <- rbind(
+  st_minimum_bounding_circle(sf.central) %>% 
+    mutate(type = "area_circ"),
+  st_minimum_rotated_rectangle(sf.central) %>% 
+    mutate(type = "area_rect")
+) %>% 
+  select(GEOID,type) %>% 
+  st_difference(
+    sf.water_mask %>% st_transform(as.numeric(needed_crs))
+  ) %>% 
+  mutate(buffer_area = as.numeric(st_area(geometry))) %>% 
+  st_drop_geometry() %>% 
+  pivot_wider(names_from = type, values_from = buffer_area)
+sf.central <- inner_join(
+  sf.central, sf.central_buffers, by = join_by(GEOID == GEOID)
+)
+sf.central <- sf.central %>% st_difference(
+    sf.water_mask %>% st_transform(as.numeric(needed_crs))
+  ) %>% 
+  mutate(re_area = as.numeric(st_area(geometry)),
+         diff_circ = re_area/area_circ,
+         diff_rect = re_area/area_rect)
+
+# Simple average, assume that each listed city has equal weight in the metro
+
+df.central_index <- sf.central %>% 
+  st_drop_geometry() %>% 
+  group_by(cbsacode) %>% 
+  summarise(index_rect_central = mean(diff_rect),
+            index_circ_central = mean(diff_circ)) %>% 
+  inner_join(xwalk.cbsa_county %>% 
+               select(cbsacode) %>% unique(),
+             by = "cbsacode") 
+
+df.frag_index = read_csv("data/fragmentation_top_100.csv") %>% 
+  select(-cities) %>% 
+  mutate(cbsacode = as.character(cbsacode)) %>% 
+  left_join(df.central_index, by = "cbsacode")
+
+write.csv(df.frag_index, file = "data/fragmentation_top_100.csv", row.names = FALSE)
 ```
 
