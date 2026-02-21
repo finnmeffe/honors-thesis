@@ -4,16 +4,18 @@ output: html_document
 date: "2026-01-25"
 ---
 
+### Overview
+
 This .Rmd file goes through the procedure in steps for creating a new type of measure for spatial fragmentation based upon the distorted shapes observed in American municipal boundaries. Typically, research relies on simple aggregates weighted by population (e.g. number of municipalities per person). I construct a population HHI for each CBSA as a means of more accurately assessing the degree to which municipal authority (simply taxpayers) is concentrated or distributed, though introducing population into the fragmentation index itself may introduce endogeneity concerns through the potential for population sorting being correlated with that of firms. As such, I aim to create a measure that explicity uses the shapes of incorporated places as a means of analyzing fragmentation.
 The strange shapes of American municipalities have been noted in publications such as The Economist (https://www.economist.com/united-states/2018/12/22/why-american-cities-are-so-weirdly-shaped). I aim to quantify this "strangeness," calculating a municipality's departure from a "normal" or "ideal" shape, which I code here as a minimum bounding circle or rectangle. The intuition is that these departures proxy the fragmentation of a CBSA as municipal competition results in the splintering of borders. This can be represented as a weighted average of percent of the ideal shape occupied across the entire CBSA, or simply this deviation for the central city (for instance, compare the borders of Seattle vs. Los Angeles), which serves as a less resource intensive measure of centrality. 
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-options(scipen = 0, digits = 3)  # controls base R output`
+options(scipen = 0, digits = 5)  # controls base R output`
 if(!require('pacman')) {
   install.packages('pacman')
 }
-pacman::p_load(ggplot2, dplyr, tidyverse, data.table, lubridate, ggpubr, skimr, scales, plotly, tidycensus, readxl, httr, jsonlite, glue, sf, mapview, tigris, crsuggest, lwgeom, spatstat, patchwork) 
+pacman::p_load(ggplot2, dplyr, tidyverse, data.table, lubridate, ggpubr, skimr, scales, plotly, tidycensus, readxl, httr, jsonlite, glue, sf, mapview, tigris, crsuggest, lwgeom, spatstat, patchwork, rnaturalearth) 
 ```
 
 Optional function in the case that unzipping geographic files is necessary
@@ -31,6 +33,10 @@ unzip_shape <- function(file_url, sf_name) {
 }
 ```
 
+### Step-by-step procedure
+
+#### Set-up
+
 First, I retrieve a county-CBSA crosswalk file as well as a national shapefile for all counties in the US. These are joined to create a map of all CBSAs with their associated counties.
 
 ```{r}
@@ -41,6 +47,7 @@ xwalk.cbsa_county <- read_csv("https://data.nber.org/cbsa-csa-fips-county-crossw
     fullfips = paste0(fipsstatecode,fipscountycode),
     cbsacode = as.character(cbsacode)
   ) %>% 
+  filter(metropolitanmicropolitanstatis == "Metropolitan Statistical Area") %>% 
   select(cbsacode,cbsatitle,fipsstatecode,fipscountycode,fullfips)
 
 # get county shapefiles (not included in tiger place shapefiles)
@@ -59,30 +66,52 @@ ggplot(sf.counties %>%
        , aes(fill = cbsacode)) +
   geom_sf() +
   theme(legend.position = "none")
+
+# Load the complete national place file. These are already clipped by water boundary, so no need to perform erase_water() yet.
+
+sf.nat_places <- places(
+  state = NULL,
+  cb = TRUE
+)
+
+sf_use_s2(FALSE)
+sf.water_mask <- ne_download(scale = 10, type = "lakes", category = "physical", returnclass = "sf") %>% 
+  filter(name %in% c("Lake Superior", "Lake Michigan", "Lake Huron", 
+                     "Lake Erie", "Lake Ontario")) %>% 
+  bind_rows(
+    ne_download(scale = 10, type = "ocean", category = "physical", returnclass = "sf")
+  ) %>% 
+  st_make_valid() %>% 
+  st_union() %>% 
+  st_make_valid()
+sf_use_s2(TRUE)
 ```
+#### Main body
+
 Next, I select a CBSA (in this case, Chicago), and find the requisite counties and TIGER place shapefiles, which are merged to create a full place shapefile for the CBSA.
 
 ```{r}
 # initialize with CBSA code
 
-needed_cbsacode = "31140"
+needed_cbsacode = "42660"
 
 needed_fips <- xwalk.cbsa_county %>% 
   filter(grepl(needed_cbsacode,cbsacode)) %>% 
   distinct(fullfips) %>% 
   pull(fullfips)
 
+# Since places can span multiple counties, there is no identifier in the data. Thus, need to use a spatial clip
+
 sf.places <-
   st_intersection(
-    places(state = c(substr(needed_fips, start = 1, stop = 2) %>% 
-                       unique()),
-           cb = FALSE),
+    sf.nat_places %>% 
+      filter(STATEFP %in% c(substr(needed_fips, start = 1, stop = 2) %>% 
+                       unique())),
     sf.counties %>% 
       filter(GEOID %in% c(needed_fips)) %>% 
       select()
   ) %>% 
-  filter(LSAD %in% c("25","43")) %>% 
-  erase_water(area_threshold = 0.9) 
+  filter(LSAD %in% c("25","43"))
 
 needed_crs <- suggest_crs(sf.places) %>% 
   filter(crs_units == "m") %>% 
@@ -106,30 +135,30 @@ With each place polygon, I now calculate the minimum bounding circle and rectang
 ```{r}
 # now calculate a spatial index
 
-sf.place_buffer <- st_minimum_bounding_circle(sf.places) %>% 
-  select(GEOID) %>% 
-  erase_water(area_threshold = 0.9) %>% 
+sf.buffers <- rbind(
+  st_minimum_bounding_circle(sf.places) %>% 
+    mutate(type = "area_circ"),
+  st_minimum_rotated_rectangle(sf.places) %>% 
+    mutate(type = "area_rect")
+) %>% 
+  select(GEOID,type) %>% 
+  st_difference(
+    sf.water_mask %>% st_transform(as.numeric(needed_crs))
+  ) %>% 
   mutate(buffer_area = as.numeric(st_area(geometry))) %>% 
-  st_drop_geometry()
-
-sf.place_buffer_rect <- st_minimum_rotated_rectangle(sf.places) %>% 
-  select(GEOID) %>% 
-  erase_water(area_threshold = 0.9) %>% 
-  mutate(rect_buffer_area = as.numeric(st_area(geometry))) %>% 
-  st_drop_geometry()
+  st_drop_geometry() %>% 
+  pivot_wider(names_from = type, values_from = buffer_area)
 
 sf.places <- inner_join(
-  sf.places, sf.place_buffer, by = join_by(GEOID == GEOID)
+  sf.places, sf.buffers, by = join_by(GEOID == GEOID)
 )
 
-sf.places <- inner_join(
-  sf.places, sf.place_buffer_rect, by = join_by(GEOID == GEOID)
-)
-
-sf.places <- sf.places %>% 
+sf.places <- sf.places %>% st_difference(
+    sf.water_mask %>% st_transform(as.numeric(needed_crs))
+  ) %>% 
   mutate(re_area = as.numeric(st_area(geometry)),
-         diff_circ = re_area/buffer_area,
-         diff_rect = re_area/rect_buffer_area) %>% 
+         diff_circ = re_area/area_circ,
+         diff_rect = re_area/area_rect) %>% 
   filter(re_area > 1000) %>% # this filters out extremely small areas (happens if clip performs weirdly)
   arrange(-diff_rect)
 ```
@@ -167,7 +196,133 @@ The final step is converting these municipal-level figures into a global index f
 sf.places <- sf.places %>% 
   mutate(pct_area = re_area/sum(re_area))
 
-index_circ <- sum(sf.places$diff_circ * sf.places$pct_area)
-index_rect <- sum(sf.places$diff_rect * sf.places$pct_area)
+index_circ <- sum((1-sf.places$diff_circ) * sf.places$pct_area)
+index_rect <- sum((1-sf.places$diff_rect) * sf.places$pct_area)
+```
+
+### Function
+
+This requires the set-up chunk to be performed - load in the national places and counties shapefiles as well as the crosswalk.
+
+```{r}
+get_spat_diff_index <- function(cbsacode) {
+  needed_cbsacode <- as.character(cbsacode)
+  
+  needed_fips <- xwalk.cbsa_county %>% 
+    filter(grepl(needed_cbsacode,cbsacode)) %>% 
+    distinct(fullfips) %>% 
+    pull(fullfips)
+  
+  sf.places <-
+  st_intersection(
+    sf.nat_places %>% 
+      filter(STATEFP %in% c(substr(needed_fips, start = 1, stop = 2) %>% 
+                       unique())),
+    sf.counties %>% 
+      filter(GEOID %in% c(needed_fips)) %>% 
+      select()
+  ) %>% 
+  filter(LSAD %in% c("25","43"))
+  
+  needed_crs <- suggest_crs(sf.places) %>% 
+  filter(crs_units == "m") %>% 
+  pull(crs_code) %>% 
+  first()
+  
+  sf.places <- st_transform(sf.places, as.numeric(needed_crs)) %>% 
+  group_by(GEOID) %>%
+  summarise(across(-geometry, first),
+    geometry = st_union(geometry), .groups = "drop")
+  
+  sf.buffers <- rbind(
+  st_minimum_bounding_circle(sf.places) %>% 
+    mutate(type = "area_circ"),
+  st_minimum_rotated_rectangle(sf.places) %>% 
+    mutate(type = "area_rect")
+) %>% 
+  select(GEOID,type) %>% 
+    suppressMessages %>% 
+  st_difference(
+    sf.water_mask %>% st_transform(as.numeric(needed_crs))
+  ) %>% 
+  mutate(buffer_area = as.numeric(st_area(geometry))) %>% 
+  st_drop_geometry() %>% 
+  pivot_wider(names_from = type, values_from = buffer_area)
+  
+  sf.places <- inner_join(
+  sf.places, sf.buffers, by = join_by(GEOID == GEOID)
+)
+
+  sf.places <- sf.places %>% st_difference(
+    sf.water_mask %>% st_transform(as.numeric(needed_crs))
+  ) %>%
+  mutate(re_area = as.numeric(st_area(geometry)),
+         diff_circ = re_area/area_circ,
+         diff_rect = re_area/area_rect) %>% 
+  filter(re_area > 1000)
+  
+  sf.places <- sf.places %>% 
+  mutate(pct_area = re_area/sum(re_area))
+
+index_circ <- sum((1-sf.places$diff_circ) * sf.places$pct_area)
+index_rect <- sum((1-sf.places$diff_rect) * sf.places$pct_area)
+
+return(tibble(index_circ = index_circ,
+              index_rect = index_rect))
+}
+
+plot_places <- function(cbsacode) {
+  needed_cbsacode <- as.character(cbsacode)
+  
+  needed_fips <- xwalk.cbsa_county %>% 
+    filter(grepl(needed_cbsacode,cbsacode)) %>% 
+    distinct(fullfips) %>% 
+    pull(fullfips)
+  
+  sf.places <-
+  st_intersection(
+    sf.nat_places %>% 
+      filter(STATEFP %in% c(substr(needed_fips, start = 1, stop = 2) %>% 
+                       unique())),
+    sf.counties %>% 
+      filter(GEOID %in% c(needed_fips)) %>% 
+      select()
+  ) %>% 
+  filter(LSAD %in% c("25","43"))
+  
+  needed_crs <- suggest_crs(sf.places) %>% 
+  filter(crs_units == "m") %>% 
+  pull(crs_code) %>% 
+  first()
+  
+  sf.places <- st_transform(sf.places, as.numeric(needed_crs)) %>% 
+  group_by(GEOID) %>%
+  summarise(across(-geometry, first),
+    geometry = st_union(geometry), .groups = "drop")
+  
+  return(ggplot(data = sf.places) +
+           geom_sf())
+}
+```
+
+Sanity check: test with the MSAs of Washington State. The plot_places function was added above as an eye-test for distortion.
+
+```{r}
+test_cbsas <- xwalk.cbsa_county %>% 
+  filter(fipsstatecode == 53) %>% 
+  distinct(cbsacode)
+
+test_cbsas <- test_cbsas %>% 
+  mutate(output = map(cbsacode, get_spat_diff_index, .progress = TRUE)) %>% 
+  unnest(output)
+
+# after testing, can check highest and lowest scores:
+plot_places()
+```
+
+## Top 100 MSAs
+
+```{r}
+df.frag_index <- read_csv("data/fragmentation_basic")
 ```
 
