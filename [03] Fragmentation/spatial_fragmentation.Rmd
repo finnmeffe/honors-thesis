@@ -37,7 +37,7 @@ unzip_shape <- function(file_url, sf_name) {
 
 #### Set-up
 
-First, I retrieve a county-CBSA crosswalk file as well as a national shapefile for all counties in the US. These are joined to create a map of all CBSAs with their associated counties.
+First, I retrieve a county-CBSA crosswalk file as well as a national shapefile for all counties in the US. These are joined to create a map of all CBSAs with their associated counties. Additionally, I create a water poly
 
 ```{r}
 # cross-walk data to connect county and cbsa
@@ -73,6 +73,8 @@ sf.nat_places <- places(
   state = NULL,
   cb = TRUE
 )
+
+# Create a basic water filter using coastline and Great Lakes
 
 sf_use_s2(FALSE)
 sf.water_mask <- ne_download(scale = 10, type = "lakes", category = "physical", returnclass = "sf") %>% 
@@ -222,7 +224,8 @@ get_spat_diff_index <- function(cbsacode) {
       filter(GEOID %in% c(needed_fips)) %>% 
       select()
   ) %>% 
-  filter(LSAD %in% c("25","43"))
+  filter(LSAD %in% c("25","43")) %>% 
+    st_make_valid()
   
   needed_crs <- suggest_crs(sf.places) %>% 
   filter(crs_units == "m") %>% 
@@ -242,8 +245,10 @@ get_spat_diff_index <- function(cbsacode) {
 ) %>% 
   select(GEOID,type) %>% 
     suppressMessages %>% 
+    st_make_valid() %>% 
   st_difference(
-    sf.water_mask %>% st_transform(as.numeric(needed_crs))
+    sf.water_mask %>% st_transform(as.numeric(needed_crs)) %>% 
+    st_make_valid()
   ) %>% 
   mutate(buffer_area = as.numeric(st_area(geometry))) %>% 
   st_drop_geometry() %>% 
@@ -300,9 +305,13 @@ plot_places <- function(cbsacode) {
   summarise(across(-geometry, first),
     geometry = st_union(geometry), .groups = "drop")
   
-  return(ggplot(data = sf.places) +
-           geom_sf())
+  return(mapview(sf.places))
 }
+
+safe_get_spat_diff_index <- possibly(
+  get_spat_diff_index, 
+  otherwise = tibble(index_circ = NA_real_, index_rect = NA_real_)
+)
 ```
 
 Sanity check: test with the MSAs of Washington State. The plot_places function was added above as an eye-test for distortion.
@@ -323,6 +332,21 @@ plot_places()
 ## Top 100 MSAs
 
 ```{r}
-df.frag_index <- read_csv("data/fragmentation_basic")
+# get the top 100 MSAs by population
+df.frag_index <- read_csv("data/fragmentation_basic.csv") %>% 
+  arrange(-pop_total) %>% 
+  slice(1:100)
+
+test <- safe_get_spat_diff_index(26420)
+
+df.frag_index <- df.frag_index %>% 
+  mutate(output = map(cbsacode, safe_get_spat_diff_index, .progress = TRUE)) %>% 
+  unnest(output)
+
+ggplot(data = df.frag_index, aes(x = hhi_pop_total, y = index_rect)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+plot_places(14460)
 ```
 
