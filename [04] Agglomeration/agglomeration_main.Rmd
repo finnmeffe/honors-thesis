@@ -249,14 +249,15 @@ zbp_2019_ind <- zbp_2019_long %>%
 n_unique(zbp_2019_ind$naics)
 
 # Quick check to visualize
-mapview(geo.zcta %>% 
-          inner_join(zbp_2019_ind, by = join_by(ZCTA5CE10 == zip)) %>% 
-          group_by(ZCTA5CE10) %>% 
-          summarise(total_est = sum(est)),
-        zcol = "total_est")
+#mapview(geo.zcta %>% 
+#          inner_join(zbp_2019_ind, by = join_by(ZCTA5CE10 == zip)) %>% 
+#          group_by(ZCTA5CE10) %>% 
+#          summarise(total_est = sum(est)),
+#        zcol = "total_est")
 ```
 
 Perform statistical analysis on the enriched LODES points. Reference LODES variables documentation [here](https://lehd.ces.census.gov/data/lodes/LODES8/LODESTechDoc8.0.pdf), showing that CNS09 (corresponding to NAICS 51) and CNS12 (corresponding to NAICS 54) cover the needed NAICS codes.
+To find the number of relevant establishments per block, I perform a matching procedure where potential point locations are weighted within ZIP codes by their share of LODES employment, then assigned firms based on these probabilities.
 
 ```{r}
 # Function to fetch blocks as points given a CBSA code
@@ -268,7 +269,7 @@ get_block_points <- function(cbsacode) {
 
   counties_by_state <- split(x$fipscountycode, x$fipsstatecode)
 
-  purrr::imap(counties_by_state, ~ blocks(
+  result <- purrr::imap(counties_by_state, ~ blocks(
       state = .y,
       county = .x,
       year = 2010,
@@ -276,13 +277,20 @@ get_block_points <- function(cbsacode) {
     )) %>%
     bind_rows() %>%
     st_centroid()
+  
+  # Use projected geometry
+  crs <- suggest_top_crs(result)
+  result <- result %>% 
+    st_transform(crs)
+  
+  return(result)
 }
 
 geo.block_points <- get_block_points(42660) 
 
-# Use projected geometry
-crs <- suggest_top_crs(geo.block_points)
+## reassemble this function. will need to create a new LODES fetch for multiple states like above
 
+point_match <- function(block_points) {
 # Filter points where there is nonzero employment in both CNS09 and CNS12
 geo.block_ind <- geo.block_points %>% 
   st_transform(crs) %>% 
@@ -297,11 +305,16 @@ geo.zcta_ind <- geo.zcta %>%
   select(-GEOID10) %>% 
   st_transform(crs)
 
+# Block-ZIP full joined 
 geo.ind_full <- st_join(geo.block_ind, geo.zcta_ind, join = st_within) %>% 
   filter(!is.na(ZCTA5CE10))
 
-geo.test <- geo.ind_full %>% 
-  select(GEOID10, CNS09, CNS12, ZCTA = ZCTA5CE10, naics, adj_est) %>% 
+# Perform the matching procedure
+geo.block_est <- geo.ind_full %>% 
+  select(GEOID10, CNS09, CNS12, ZCTA = ZCTA5CE10, naics, adj_est) %>%
+  mutate(x = st_coordinates(geo.ind_full)[,1],
+         y = st_coordinates(geo.ind_full)[,2]) %>%
+  st_drop_geometry() %>% 
   group_by(ZCTA) %>% 
   mutate(CNS09_total = sum(CNS09) / n_unique(naics),
          CNS12_total = sum(CNS12) / n_unique(naics),
@@ -309,57 +322,59 @@ geo.test <- geo.ind_full %>%
   ungroup() %>% 
   mutate(CNS09_pct = CNS09 /CNS09_total,
          CNS12_pct = CNS12 / CNS12_total,
-         est_pct = case_when(
+         est_point = case_when(
            naics == "5112//" ~ adj_est * CNS09_pct,
            naics == "5182//" ~ adj_est * CNS09_pct,
            naics == "5415//" ~ adj_est * CNS12_pct,
            naics == "5417//" ~ adj_est * CNS12_pct
-         ))
+         )) %>% 
+  group_by(GEOID10) %>% 
+  summarise(est_total = sum(est_point),
+            x = first(x),
+            y = first(y)) %>% 
+  filter(est_total > 0) # remove zeros
 
-dim(geo.test)
-dim(geo.test %>% 
-      filter(est_pct > 0.25))
+return(geo.block_est)
+}
 
-mapview(geo.test %>% 
-          filter(est_pct > 0.25) %>% 
-          group_by(GEOID10) %>% 
-          summarise(n = sum(est_pct)),
-        zcol = "n")
+geo.block_est <- point_match(geo.block_points)
 
-mapview(geo.zcta_ind %>% 
-          filter(cbsa == "42660") %>% 
-          group_by(ZCTA5CE10) %>% 
-          summarise(n = sum(est)),
-        zcol = "n")
+# Check to make sure sums still correspond with the actual number of establishments in ZBP data
+sum(geo.block_est$est_total)
+
+zbp_2019_long %>% filter(cbsa == "42660",
+                         est_desc == "est",
+                         naics %in% naics_codes) %>% 
+  summarise(n = sum(est)) %>% 
+  pull(n)
+
+# Optional view
+# mapview(geo.test %>% filter(est_total > 0.25), zcol = "est_total")
 ```
 
-Perform spatial statistics
+Perform spatial statistics with the assembled point-establishment dataset.
 
 ```{r}
-geo.block_ppp <- geo.block_points %>% 
-  st_transform(crs) %>% 
-  mutate(x = st_coordinates(geo.block_points)[,1],
-         y = st_coordinates(geo.block_points)[,2]) %>% 
-  select(GEOID10,x,y) %>% 
-  st_drop_geometry() %>% 
-  inner_join(df.lodes, by = join_by(GEOID10 == w_geocode))
-
-my_wmppp <- wmppp(
+test_wmppp <- wmppp(
   data.frame(
-    X           = geo.block_points$x,
-    Y           = geo.block_points$y,
+    X           = geo.block_est$x,
+    Y           = geo.block_est$y,
     PointType   = "Block",
-    PointWeight = geo.block_points$CNS12
+    PointWeight = geo.block_est$est_total
   ),
   window = owin(
-    xrange = range(geo.block_points$x),
-    yrange = range(geo.block_points$y)
+    xrange = range(geo.block_est$x),
+    yrange = range(geo.block_est$y)
   )
-)
+) %>% 
+  rescale(s = 1000, unitname = "km")
 
-result <- Lest(my_wmppp, correction = "Ripley")
+plot(test_wmppp)
+
+result <- Lest(test_wmppp, correction = "Ripley", rmax = 100)
 
 ggplot() +
-  geom_line(data = result, aes(x = r, y = iso))
+  geom_line(data = result, aes(x = r, y = iso)) +
+  geom_line(data = result, aes(x = r, y = theo))
 ```
 
