@@ -204,7 +204,7 @@ index_rect <- sum((1-sf.places$diff_rect) * sf.places$pct_area)
 
 ### Function
 
-This requires the set-up chunk to be performed - load in the national places and counties shapefiles as well as the crosswalk.
+This requires the set-up chunk to be performed - load in the national places and counties shapefiles as well as the crosswalk. The following chunk sets up 3 functions that will be used to construct the spatial fragmentation indices: the primary function is get_spat_diff_index, which repeats the steps outlined above; plot_places returns a plot of a specified CBSA to eye-test any areas of interest and safe_get_spat_diff_index wraps the main function to ensure errors do not disrupt assembly.
 
 ```{r}
 get_spat_diff_index <- function(cbsacode) {
@@ -314,7 +314,7 @@ safe_get_spat_diff_index <- possibly(
 )
 ```
 
-Sanity check: test with the MSAs of Washington State. The plot_places function was added above as an eye-test for distortion.
+Sanity check: test with the MSAs of Washington State.
 
 ```{r}
 test_cbsas <- xwalk.cbsa_county %>% 
@@ -331,7 +331,7 @@ plot_places()
 
 ## Top 100 MSAs
 
-Run this chunk to calculate metro-wide scores for each of the top 100 MSAs by population.
+I now begin the formal assembly of CBSA scores. Here, only the top 100 MSAs are calculated, though this procedure can easily be expanded to all MSAs or even the ~900 CBSAs listed by the US Census.
 
 ```{r}
 # get the top 100 MSAs by population
@@ -339,17 +339,15 @@ df.frag_index <- read_csv("data/fragmentation_basic.csv") %>%
   arrange(-pop_total) %>% 
   slice(1:100)
 
-test <- safe_get_spat_diff_index(26420)
-
+# perform the spatial difference index function
 df.frag_index <- df.frag_index %>% 
   mutate(output = map(cbsacode, safe_get_spat_diff_index, .progress = TRUE)) %>% 
   unnest(output)
 
+# plot similarity to other measures of fragmentation
 ggplot(data = df.frag_index, aes(x = hhi_pop_total, y = index_rect)) +
   geom_point() +
   geom_smooth(method = "lm")
-
-plot_places(14460)
 
 write.csv(df.frag_index, file = "data/fragmentation_top_100.csv", row.names = FALSE)
 ```
