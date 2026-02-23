@@ -14,6 +14,6 @@ Holds code for a secondary instrument based on municipal incorporation date as b
 
 spatial_fragmentation.rmd constructs a new measure of political fragmentation using border shapes as a proxy for municipal competition as a further exercise of defining fragmentation in the thesis. index.py and merge.py are simple files to construct the primary fragmentation measure.
 
-### [04] Agglomeration - _Python_
+### [04] Agglomeration - _R, Python_
 
-Holds code for constructing the measure of firm agglomeration. cbsa_to_lehd_json.py creates jsons for each CBSA in the sample from LODES data. The measure of concentration (Ripley L) is then calculated from these jsons using ripley_l.py.
+Holds code for constructing the measure of firm agglomeration. cbsa_to_lehd_json.py creates jsons for each CBSA in the sample from LODES data. The measure of concentration (Ripley L) is then calculated from these jsons using ripley_l.py. agglomeration_main.R contains a similar workflow, though more refined and readable as Rmd file (suggested to get an overview of the process).
