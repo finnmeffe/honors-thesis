@@ -15,7 +15,7 @@ options(scipen = 0, digits = 5)  # controls base R output`
 if(!require('pacman')) {
   install.packages('pacman')
 }
-pacman::p_load(ggplot2, dplyr, tidyverse, data.table, lubridate, ggpubr, skimr, scales, plotly, tidycensus, readxl, httr, jsonlite, glue, sf, mapview, tigris, crsuggest, lwgeom, spatstat, patchwork, rnaturalearth) 
+pacman::p_load(ggplot2, dplyr, tidyverse, data.table, lubridate, ggpubr, skimr, scales, plotly, tidycensus, readxl, httr, jsonlite, glue, sf, mapview, tigris, crsuggest, lwgeom, spatstat, patchwork, rnaturalearth, showtext, systemfonts) 
 ```
 
 Optional function in the case that unzipping geographic files is necessary
@@ -90,7 +90,7 @@ sf_use_s2(TRUE)
 ```
 #### Main body
 
-Next, I select a CBSA (in this case, Chicago), and find the requisite counties and TIGER place shapefiles, which are merged to create a full place shapefile for the CBSA.
+Next, I select a CBSA (in this case, Seattle), and find the requisite counties and TIGER place shapefiles, which are merged to create a full place shapefile for the CBSA.
 
 ```{r}
 # initialize with CBSA code
@@ -305,7 +305,7 @@ plot_places <- function(cbsacode) {
   summarise(across(-geometry, first),
     geometry = st_union(geometry), .groups = "drop")
   
-  return(mapview(sf.places))
+  return(sf.places)
 }
 
 safe_get_spat_diff_index <- possibly(
@@ -326,7 +326,7 @@ test_cbsas <- test_cbsas %>%
   unnest(output)
 
 # after testing, can check highest and lowest scores:
-plot_places()
+ggplot(data = plot.places())
 ```
 
 ## Top 100 MSAs
@@ -425,5 +425,59 @@ df.frag_index = read_csv("data/fragmentation_top_100.csv") %>%
   left_join(df.central_index, by = "cbsacode")
 
 write.csv(df.frag_index, file = "data/fragmentation_top_100.csv", row.names = FALSE)
+```
+
+## Figures
+
+These chunks cover code written for the export of usable figures in the final paper. The first creates a plot for the Birmingham MSA, with the Birmingham municipality highlighted in red.
+
+```{r}
+sf.bir <- plot_places(13820) %>% 
+  mutate(highlight = if_else(NAME == "Birmingham",1,0),
+         highlight = as.character(highlight))
+
+p.bir <- ggplot(data = sf.bir, aes(fill = highlight)) +
+  theme_void() + 
+  scale_fill_manual(values = c("1" = "red","0" = "lightgrey")) +
+  geom_sf() +
+  theme(legend.position = "none")
+
+p.bir
+ggsave("figures/bir_msa.png", plot = p.bir)
+```
+Next, I create visualizations for the ideal shape buffer process
+
+```{r}
+sf.bir <- sf.bir %>% 
+  filter(NAME == "Birmingham") %>% 
+  mutate(area = st_area(geometry))
+
+sf.bir_circ <- st_minimum_bounding_circle(sf.bir) %>% 
+  mutate(area = st_area(geometry))
+sf.bir_rect <- st_minimum_rotated_rectangle(sf.bir) %>% 
+  mutate(area = st_area(geometry))
+
+systemfonts::system_fonts() %>% 
+  filter(grepl("Times", name, ignore.case = TRUE))
+
+sf.bir$area[1]/sf.bir_circ$area[1]
+
+p.bir_circ <- ggplot() +
+  geom_sf(data = sf.bir_circ, fill = "white") +
+  geom_sf(data = sf.bir, fill = "red") +
+  theme_void() +
+  theme(plot.caption = element_text(size = 12)) +
+  labs(caption = bquote(lambda == .(sf.bir$area[1] / sf.bir_circ$area[1])))
+
+
+p.bir_rect <- ggplot() +
+  geom_sf(data = sf.bir_rect, fill = "white") +
+  geom_sf(data = sf.bir, fill = "red") +
+  theme_void() +
+  theme(plot.caption = element_text(size = 12)) +
+  labs(caption = bquote(lambda == .(sf.bir$area[1] / sf.bir_rect$area[1])))
+
+p.bir_circ + p.bir_rect
+ggsave("figures/bir_buffers.png", plot = p.bir_circ + p.bir_rect)
 ```
 
