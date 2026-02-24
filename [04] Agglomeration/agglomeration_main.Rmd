@@ -292,6 +292,8 @@ geo.block_points <- get_block_points(42660)
 
 point_match <- function(block_points) {
 # Filter points where there is nonzero employment in both CNS09 and CNS12
+  crs <- suggest_top_crs(geo.block_points)
+  
 geo.block_ind <- geo.block_points %>% 
   st_transform(crs) %>% 
   select(GEOID10) %>% 
@@ -377,4 +379,37 @@ ggplot() +
   geom_line(data = result, aes(x = r, y = iso)) +
   geom_line(data = result, aes(x = r, y = theo))
 ```
+
+## Figures
+
+```{r}
+plot_zbp <- zbp_2019_long %>% 
+  filter(cbsa == "42660",
+         naics %in% naics_codes) %>% 
+  group_by(zip) %>% 
+  summarise(est = sum(est))
+
+p.zbp <- ggplot(data = geo.zcta %>% 
+         inner_join(plot_zbp, by = join_by(ZCTA5CE10 == zip)),
+       aes(fill = est)) +
+  geom_sf() +
+  scale_fill_gradient(low = "blue", high = "yellow") +
+  theme_void() +
+  labs(fill = "Adjusted \nEstablishments") 
+
+ggsave("figures/seattle_zbp.png", plot = p.zbp)
+
+
+plot_points <- geo.block_est %>% 
+  st_as_sf(coords = c("x","y"), crs = 6596)
+
+p.lodes <- ggplot(data = plot_points, aes(color = est_total)) + # Use color, not fill
+  geom_sf(size = 0.5) + 
+  scale_color_gradient(low = "blue", high = "yellow") + # Use scale_color
+  theme_void() +
+  labs(color = "Adjusted \nEstablishments")
+
+ggsave("figures/seattle_lodes.png", plot = p.lodes)
+```
+
 
