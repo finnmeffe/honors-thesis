@@ -15,7 +15,7 @@ options(scipen = 0, digits = 5)  # controls base R output`
 if(!require('pacman')) {
   install.packages('pacman')
 }
-pacman::p_load(ggplot2, dplyr, tidyverse, data.table, lubridate, ggpubr, skimr, scales, plotly, tidycensus, readxl, httr, jsonlite, glue, sf, mapview, tigris, crsuggest, lwgeom, spatstat, patchwork, rnaturalearth, showtext, systemfonts) 
+pacman::p_load(ggplot2, dplyr, tidyverse, data.table, lubridate, ggpubr, skimr, scales, plotly, tidycensus, readxl, httr, jsonlite, glue, sf, mapview, tigris, crsuggest, lwgeom, spatstat, patchwork, rnaturalearth, showtext, systemfonts, kableExtra) 
 ```
 
 Optional function in the case that unzipping geographic files is necessary
@@ -479,5 +479,49 @@ p.bir_rect <- ggplot() +
 
 p.bir_circ + p.bir_rect
 ggsave("figures/bir_buffers.png", plot = p.bir_circ + p.bir_rect)
+```
+Chunk for the creation of summary statistics
+
+```{r}
+df.top_100 <- read_csv("data/fragmentation_top_100.csv")
+
+top10_rect <- df.top_100 %>% arrange(-index_rect) %>% slice(1:10)
+bottom10_rect <- df.top_100 %>% arrange(index_rect) %>% slice(1:10)
+top10_circ <- df.top_100 %>% arrange(-index_circ) %>% slice(1:10)
+bottom10_circ <- df.top_100 %>% arrange(index_circ) %>% slice(1:10)
+combined_rect <- bind_rows(top10_rect, bottom10_rect) %>% 
+  select(cbsatitle,index_rect,index_rect_central,num_munis,pop_muni,hhi_pop_muni)
+combined_circ <- bind_rows(top10_circ, bottom10_circ) %>% 
+  select(cbsatitle,index_circ,index_circ_central,num_munis,pop_muni,hhi_pop_muni)
+
+combined_rect %>%
+  kable("latex", 
+        booktabs = TRUE, 
+        linesep = "", 
+        caption = "Top and Bottom 10 MSAs by Spatial Fragmentation (Bounding Rectangle)",
+        col.names = c("CBSA Title","SDI","SDI - Central","Num. Munis","Muni Pop.","HHI - Muni Pop.")) %>%
+  kable_styling(latex_options = c("hold_position", "scale_down")) %>%
+  column_spec(1, italic = TRUE) %>%
+  row_spec(0, bold = TRUE) %>%
+  row_spec(1:20, extra_latex_after = "\\addlinespace[0.2em]") %>% 
+  row_spec(10, hline_after = TRUE) %>% 
+  pack_rows("Top 10", 1, 10, latex_gap_space = "0.7em") %>%
+  pack_rows("Bottom 10", 11, 20, latex_gap_space = "0.7em") %>%
+  save_kable("figures/spat_frag_sumstats_rect.tex")
+
+combined_circ %>%
+  kable("latex", 
+        booktabs = TRUE, 
+        linesep = "", 
+        caption = "Top and Bottom 10 MSAs by Spatial Fragmentation (Bounding Circle)",
+        col.names = c("CBSA Title","SDI","SDI - Central","Num. Munis","Muni Pop.","HHI - Muni Pop.")) %>%
+  kable_styling(latex_options = c("hold_position", "scale_down")) %>%
+  column_spec(1, italic = TRUE) %>%
+  row_spec(0, bold = TRUE) %>%
+  row_spec(1:20, extra_latex_after = "\\addlinespace[0.2em]") %>% 
+  row_spec(10, hline_after = TRUE) %>% 
+  pack_rows("Top 10", 1, 10, latex_gap_space = "0.7em") %>%
+  pack_rows("Bottom 10", 11, 20, latex_gap_space = "0.7em") %>%
+  save_kable("figures/spat_frag_sumstats_circ.tex")
 ```
 
