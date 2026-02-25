@@ -10,7 +10,7 @@ options(scipen = 0, digits = 6)
 if(!require('pacman')) {
   install.packages('pacman')
 }
-pacman::p_load(ggplot2, dplyr, tidyverse, data.table, lubridate, ggpubr, skimr, scales, plotly, tidycensus, readxl, httr, jsonlite, sf, mapview, tigris, lehdr, spatstat, crsuggest, dbmss, stargazer) 
+pacman::p_load(ggplot2, dplyr, tidyverse, data.table, lubridate, ggpubr, skimr, scales, plotly, tidycensus, readxl, httr, jsonlite, sf, mapview, tigris, lehdr, spatstat, crsuggest, dbmss, stargazer, dbmss) 
 options(tigris_use_cache = TRUE)
 setwd("~/Github/honors-thesis/[04] Agglomeration")
 ```
@@ -26,6 +26,8 @@ Initialize by creating a set of crosswalk files to ensure ZIP-CBSA-County compat
 
 xwalk.cbsa_fips <- read_csv("https://data.nber.org/cbsa-csa-fips-county-crosswalk/2023/cbsa2fipsxw_2023.csv") %>% 
   mutate(fullfips = paste0(fipsstatecode, fipscountycode))
+
+xwalk.states <- fips_codes
 
 hud_key <- "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiI2IiwianRpIjoiOTkyMTgyZTJhMjMzYWIxYjg4ZTg0ZWNhNzc4YTgxZmUyZjBiMjI2YjBjN2I1Nzc2MDExZWE0NjQyMWYyMGVjMjM4M2U5MzVjOTQwNDQ2MGQiLCJpYXQiOjE3NjI1Mzg0NTEuMTcxNzA0LCJuYmYiOjE3NjI1Mzg0NTEuMTcxNzM4LCJleHAiOjIwNzgwNzEyNTEuMTU2ODU1LCJzdWIiOiIxMTI2MDMiLCJzY29wZXMiOltdfQ.VUVEmcDRysXhP5os4E3v9J4HrcFU10lycZShAQszZBUwyujCIMoFK_5WbKbKMRvvN9GJ_-mF3eJ_QcnIGuLGWg"
 hud_url <- "https://www.huduser.gov/hudapi/public/usps"
@@ -292,7 +294,24 @@ geo.block_points <- get_block_points(42660)
 
 point_match <- function(block_points) {
 # Filter points where there is nonzero employment in both CNS09 and CNS12
-  crs <- suggest_top_crs(geo.block_points)
+
+  needed_crs <- suggest_top_crs(block_points)
+
+  needed_sts <- xwalk.states %>% 
+  filter(state_code %in% unique(geo.block_points$STATEFP)) %>% 
+  distinct(state_code) %>% 
+  pull(state_code)
+  
+  lodes <- grab_lodes(
+  needed_sts,
+  2019,
+  version = "LODES7",
+  lodes_type = "wac",
+  job_type = "JT00",
+  segment = "S000",
+  agg_geo = "block",
+  use_cache = TRUE
+)
   
 geo.block_ind <- geo.block_points %>% 
   st_transform(crs) %>% 
@@ -354,6 +373,54 @@ zbp_2019_long %>% filter(cbsa == "42660",
 # mapview(geo.test %>% filter(est_total > 0.25), zcol = "est_total")
 ```
 
+This chunk performs a Ripley's L graph for different CNS groupings, contrasting with the results below.
+
+```{r}
+crs <- suggest_top_crs(geo.block_points)
+geo.block_lodes <- geo.block_points %>% 
+  st_transform(crs) %>% 
+  select(GEOID10) %>% 
+  inner_join(df.lodes, by = join_by(GEOID10 == w_geocode)) %>% 
+  mutate(x = st_coordinates(geometry)[,1],
+         y = st_coordinates(geometry)[,2]) %>%
+  st_drop_geometry() %>% 
+  select(GEOID10,x,y,starts_with("CNS"))
+
+weight_cols <- colnames(geo.block_lodes %>% 
+                          select(CNS05,CNS18,CNS10,CNS12))
+
+L_lodes <- map_dfr(weight_cols, function(w) {
+  
+  pp <- wmppp(
+    data.frame(
+      X           = geo.block_lodes$x,
+      Y           = geo.block_lodes$y,
+      PointType   = "Block",
+      PointWeight = geo.block_lodes[[w]]
+    ),
+    window = owin(
+      xrange = range(geo.block_lodes$x),
+      yrange = range(geo.block_lodes$y)
+    )
+  )
+  
+  pp <- pp[marks(pp)$PointWeight != 0]
+  pp <- as.wmppp(pp)
+  
+  result <- Kdhat(pp, r = NULL, ReferenceType = "", Weighted = TRUE)
+  
+  print(summary(marks(pp)$PointWeight))
+  
+  as.data.frame(result) %>%
+    mutate(weight = w)
+  
+})
+
+ggplot(data = L_lodes, aes(x = r, y = Kd, col = weight)) +
+  geom_line() +
+  facet_wrap(~weight)
+```
+
 Perform spatial statistics with the assembled point-establishment dataset.
 
 ```{r}
@@ -401,13 +468,18 @@ ggsave("figures/seattle_zbp.png", plot = p.zbp)
 
 
 plot_points <- geo.block_est %>% 
-  st_as_sf(coords = c("x","y"), crs = 6596)
+  st_as_sf(coords = c("x","y"), crs = 6596) %>% 
+  st_intersection(places(state = "WA", cb = TRUE) %>% 
+  filter(NAME == "Seattle") %>% 
+    st_transform(6596))
 
 p.lodes <- ggplot(data = plot_points, aes(color = est_total)) + # Use color, not fill
-  geom_sf(size = 0.5) + 
+  geom_sf(size = 0.7) + 
   scale_color_gradient(low = "blue", high = "yellow") + # Use scale_color
   theme_void() +
   labs(color = "Adjusted \nEstablishments")
+
+p.lodes
 
 ggsave("figures/seattle_lodes.png", plot = p.lodes)
 ```
