@@ -288,19 +288,21 @@ get_block_points <- function(cbsacode) {
   return(result)
 }
 
-geo.block_points <- get_block_points(42660) 
+geo.block_points <- get_block_points(42660)
+crs <- suggest_top_crs(geo.block_points)
 
-## reassemble this function. will need to create a new LODES fetch for multiple states like above
+
+# May need to think more about how the function will be constructed(NAICS beforehand or called within?)
 
 point_match <- function(block_points) {
-# Filter points where there is nonzero employment in both CNS09 and CNS12
-
+  # Filter points where there is nonzero employment in both CNS09 and CNS12
   needed_crs <- suggest_top_crs(block_points)
 
-  needed_sts <- xwalk.states %>% 
-  filter(state_code %in% unique(geo.block_points$STATEFP)) %>% 
-  distinct(state_code) %>% 
-  pull(state_code)
+  needed_sts <- 
+    xwalk.states %>% 
+    filter(state_code %in% unique(block_points$STATEFP)) %>% 
+    distinct(state) %>% pull(state) %>% 
+    tolower()
   
   lodes <- grab_lodes(
   needed_sts,
@@ -311,14 +313,18 @@ point_match <- function(block_points) {
   segment = "S000",
   agg_geo = "block",
   use_cache = TRUE
-)
+  )
   
-geo.block_ind <- geo.block_points %>% 
-  st_transform(crs) %>% 
+  # This gives all needed points in the CBSA with employment
+ block_ind <- block_points %>% 
+  st_transform(needed_crs) %>% 
   select(GEOID10) %>% 
-  inner_join(df.lodes, by = join_by(GEOID10 == w_geocode)) %>% 
+  inner_join(lodes, by = join_by(GEOID10 == w_geocode)) %>% 
   select(GEOID10, CNS09, CNS12) %>% 
-  filter(CNS09 > 0 | CNS12 > 0)
+  filter(CNS09 > 0 | CNS12 > 0) 
+  }
+
+geo.block_ind <- point_match(geo.block_points)
 
 # Create sf ZIP code file
 geo.zcta_ind <- geo.zcta %>% 
@@ -355,10 +361,6 @@ geo.block_est <- geo.ind_full %>%
             y = first(y)) %>% 
   filter(est_total > 0) # remove zeros
 
-return(geo.block_est)
-}
-
-geo.block_est <- point_match(geo.block_points)
 
 # Check to make sure sums still correspond with the actual number of establishments in ZBP data
 sum(geo.block_est$est_total)
@@ -369,11 +371,14 @@ zbp_2019_long %>% filter(cbsa == "42660",
   summarise(n = sum(est)) %>% 
   pull(n)
 
+ggplot(geo.block_est, aes(x=x,y=y)) +
+  geom_point()
+
 # Optional view
 # mapview(geo.test %>% filter(est_total > 0.25), zcol = "est_total")
 ```
 
-This chunk performs a Ripley's L graph for different CNS groupings, contrasting with the results below.
+Before performing the main spatial statistics, let's get a simpler LODES aggregated dataset to test for clustering at broad NAICS levels. This assumes that points have already been collected from the previous chunk.
 
 ```{r}
 crs <- suggest_top_crs(geo.block_points)
@@ -384,67 +389,52 @@ geo.block_lodes <- geo.block_points %>%
   mutate(x = st_coordinates(geometry)[,1],
          y = st_coordinates(geometry)[,2]) %>%
   st_drop_geometry() %>% 
-  select(GEOID10,x,y,starts_with("CNS"))
+  select(GEOID10,x,y,starts_with("CNS")) %>% 
+  pivot_longer(cols = starts_with("CNS"),
+               names_to = "type",
+               values_to = "weights") %>% 
+  filter(weights != 0) %>% 
+  mutate(x = x/1000,
+         y = y/1000)
 
-weight_cols <- colnames(geo.block_lodes %>% 
-                          select(CNS05,CNS18,CNS10,CNS12))
-
-L_lodes <- map_dfr(weight_cols, function(w) {
-  
-  pp <- wmppp(
-    data.frame(
-      X           = geo.block_lodes$x,
-      Y           = geo.block_lodes$y,
-      PointType   = "Block",
-      PointWeight = geo.block_lodes[[w]]
-    ),
-    window = owin(
-      xrange = range(geo.block_lodes$x),
-      yrange = range(geo.block_lodes$y)
-    )
-  )
-  
-  pp <- pp[marks(pp)$PointWeight != 0]
-  pp <- as.wmppp(pp)
-  
-  result <- Kdhat(pp, r = NULL, ReferenceType = "", Weighted = TRUE)
-  
-  print(summary(marks(pp)$PointWeight))
-  
-  as.data.frame(result) %>%
-    mutate(weight = w)
-  
-})
-
-ggplot(data = L_lodes, aes(x = r, y = Kd, col = weight)) +
-  geom_line() +
-  facet_wrap(~weight)
-```
-
-Perform spatial statistics with the assembled point-establishment dataset.
-
-```{r}
-test_wmppp <- wmppp(
-  data.frame(
-    X           = geo.block_est$x,
-    Y           = geo.block_est$y,
-    PointType   = "Block",
-    PointWeight = geo.block_est$est_total
+wmppp.lodes <- wmppp(
+  df = data.frame(
+    X = geo.block_lodes$x,
+    Y = geo.block_lodes$y,
+    PointType = geo.block_lodes$type,
+    PointWeight = geo.block_lodes$weights
   ),
   window = owin(
-    xrange = range(geo.block_est$x),
-    yrange = range(geo.block_est$y)
+      xrange = range(geo.block_lodes$x),
+      yrange = range(geo.block_lodes$y)
   )
-) %>% 
-  rescale(s = 1000, unitname = "km")
+)
 
-plot(test_wmppp)
+kd_lodes <- map_dfr(c("CNS05","CNS12"), function(rt) {
+  as.data.frame(Kdhat(
+  X = wmppp.lodes,
+  ReferenceType = rt,
+  NeighborType = rt,
+  Weighted = TRUE
+)) %>% 
+    mutate(type = rt)
+})
 
-result <- Lest(test_wmppp, correction = "Ripley", rmax = 100)
+levels(marks(wmppp.lodes)$PointType)
 
-ggplot() +
-  geom_line(data = result, aes(x = r, y = iso)) +
-  geom_line(data = result, aes(x = r, y = theo))
+
+mhat_lodes <- Mhat(
+  X = wmppp.lodes,
+  ReferenceType = "CNS12",
+  NeighborType = "CNS12",
+  CaseControl = FALSE
+)
+
+ggplot(data = mhat_lodes, aes(x=r,y=M)) +
+  geom_line()
+
+ggplot(data = kd_lodes, aes(x=r,y=Kd,col=type)) +
+  geom_line()
 ```
 
 ## Figures
