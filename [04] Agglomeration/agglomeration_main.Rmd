@@ -10,8 +10,9 @@ options(scipen = 0, digits = 6)
 if(!require('pacman')) {
   install.packages('pacman')
 }
-pacman::p_load(ggplot2, dplyr, tidyverse, data.table, lubridate, ggpubr, skimr, scales, plotly, tidycensus, readxl, httr, jsonlite, sf, mapview, tigris, lehdr, spatstat, crsuggest, dbmss, stargazer, dbmss) 
+pacman::p_load(ggplot2, dplyr, tidyverse, data.table, lubridate, ggpubr, skimr, scales, plotly, tidycensus, readxl, httr, jsonlite, sf, mapview, tigris, lehdr, spatstat, crsuggest, dbmss, stargazer) 
 options(tigris_use_cache = TRUE)
+# census_api_key("", install = TRUE)
 setwd("~/Github/honors-thesis/[04] Agglomeration")
 ```
 
@@ -248,6 +249,13 @@ zbp_2019_ind <- zbp_2019_long %>%
          # cbsa == "42660",
          est_desc == "est")
 
+# Construct baseline for manufacturing
+naics_codes_baseline <- c("31----","32----","33----")
+
+zbp_2019_baseline <- zbp_2019_long %>% 
+  filter(naics %in% naics_codes_baseline,
+         est_desc == "est")
+
 n_unique(zbp_2019_ind$naics)
 
 # Quick check to visualize
@@ -320,27 +328,29 @@ point_match <- function(block_points) {
   st_transform(needed_crs) %>% 
   select(GEOID10) %>% 
   inner_join(lodes, by = join_by(GEOID10 == w_geocode)) %>% 
-  select(GEOID10, CNS09, CNS12) %>% 
-  filter(CNS09 > 0 | CNS12 > 0) 
+  select(GEOID10, starts_with("CNS"))
   }
 
 geo.block_ind <- point_match(geo.block_points)
 
-# Create sf ZIP code file
-geo.zcta_ind <- geo.zcta %>% 
-  inner_join(zbp_2019_ind, by = join_by(ZCTA5CE10 == zip)) %>% 
+block_zip_join <- function(block_ind, zbp_df) {
+  zcta <- geo.zcta %>% 
+  inner_join(zbp_df, by = join_by(ZCTA5CE10 == zip)) %>% 
   select(-GEOID10) %>% 
   st_transform(crs)
-
-# Block-ZIP full joined 
-geo.ind_full <- st_join(geo.block_ind, geo.zcta_ind, join = st_within) %>% 
+  
+  full <- st_join(block_ind, zcta, join = st_within) %>% 
   filter(!is.na(ZCTA5CE10))
+}
+
+geo.ind_full <- block_zip_join(geo.block_ind, zbp_2019_ind)
+geo.base_full <- block_zip_join(geo.block_ind, zbp_2019_baseline)
 
 # Perform the matching procedure
 geo.block_est <- geo.ind_full %>% 
   select(GEOID10, CNS09, CNS12, ZCTA = ZCTA5CE10, naics, adj_est) %>%
-  mutate(x = st_coordinates(geo.ind_full)[,1],
-         y = st_coordinates(geo.ind_full)[,2]) %>%
+  mutate(x = st_coordinates(geo.ind_full)[, 1],
+         y = st_coordinates(geo.ind_full)[, 2]) %>%
   st_drop_geometry() %>% 
   group_by(ZCTA) %>% 
   mutate(CNS09_total = sum(CNS09) / n_unique(naics),
@@ -361,9 +371,31 @@ geo.block_est <- geo.ind_full %>%
             y = first(y)) %>% 
   filter(est_total > 0) # remove zeros
 
+# Also perform for baseline. Function call may be needed in future, though would have to proof a crosswalk between the CNS and NAICS codes
+
+geo.block_est_base <- geo.base_full %>% 
+  select(GEOID10, CNS05, ZCTA = ZCTA5CE10, naics, adj_est) %>%
+  mutate(x = st_coordinates(geo.base_full)[, 1],
+         y = st_coordinates(geo.base_full)[, 2]) %>%
+  st_drop_geometry() %>% 
+  group_by(ZCTA) %>% 
+  mutate(CNS05_total = sum(CNS05) / n_unique(naics)) %>% 
+  ungroup() %>% 
+  mutate(CNS05_pct = CNS05 /CNS05_total,
+         est_point = case_when(
+           naics == "31----" ~ adj_est * CNS05_pct,
+           naics == "32----" ~ adj_est * CNS05_pct,
+           naics == "33----" ~ adj_est * CNS05_pct,
+         )) %>% 
+  group_by(GEOID10) %>% 
+  summarise(est_total = sum(est_point),
+            x = first(x),
+            y = first(y)) %>% 
+  filter(est_total > 0)
 
 # Check to make sure sums still correspond with the actual number of establishments in ZBP data
 sum(geo.block_est$est_total)
+sum(geo.block_est_base$est_total)
 
 zbp_2019_long %>% filter(cbsa == "42660",
                          est_desc == "est",
@@ -371,12 +403,20 @@ zbp_2019_long %>% filter(cbsa == "42660",
   summarise(n = sum(est)) %>% 
   pull(n)
 
+zbp_2019_baseline %>% filter(cbsa == "42660",
+                         est_desc == "est",
+                         naics %in% naics_codes_baseline) %>% 
+  summarise(n = sum(est)) %>% 
+  pull(n)
+  
+
 ggplot(geo.block_est, aes(x=x,y=y)) +
   geom_point()
 
 # Optional view
 # mapview(geo.test %>% filter(est_total > 0.25), zcol = "est_total")
 ```
+### K-Density
 
 Before performing the main spatial statistics, let's get a simpler LODES aggregated dataset to test for clustering at broad NAICS levels. This assumes that points have already been collected from the previous chunk.
 
@@ -393,9 +433,7 @@ geo.block_lodes <- geo.block_points %>%
   pivot_longer(cols = starts_with("CNS"),
                names_to = "type",
                values_to = "weights") %>% 
-  filter(weights != 0) %>% 
-  mutate(x = x/1000,
-         y = y/1000)
+  filter(weights != 0)
 
 wmppp.lodes <- wmppp(
   df = data.frame(
@@ -410,7 +448,7 @@ wmppp.lodes <- wmppp(
   )
 )
 
-kd_lodes <- map_dfr(c("CNS05","CNS12"), function(rt) {
+kd_lodes <- map_dfr(c("CNS05","CNS07","CNS10","CNS12"), function(rt) {
   as.data.frame(Kdhat(
   X = wmppp.lodes,
   ReferenceType = rt,
@@ -420,21 +458,84 @@ kd_lodes <- map_dfr(c("CNS05","CNS12"), function(rt) {
     mutate(type = rt)
 })
 
-levels(marks(wmppp.lodes)$PointType)
+p.kd_lodes <- ggplot(data = kd_lodes, aes(x=r/1000,y=Kd)) +
+  geom_line() + 
+  facet_wrap(~type) +
+  theme_bw() +
+  ylab("K-Density") + xlab("Distance (km)")
 
+p.kd_lodes
 
-mhat_lodes <- Mhat(
-  X = wmppp.lodes,
-  ReferenceType = "CNS12",
-  NeighborType = "CNS12",
-  CaseControl = FALSE
+ggsave("figures/kd_lodes.png", plot=p.kd_lodes)
+```
+
+Now perform for the selected NAICS codes with baseline manufacturing calculated
+
+```{r}
+A_points <- geo.block_est %>% 
+  mutate(est_total = round(0.15+est_total))
+
+baseline_points <- geo.block_est_base %>% 
+  mutate(est_total = round(0.15+est_total))
+
+expanded_wmppp <- function(points, point_type) {
+  points_expanded <- points[rep(seq_len(nrow(points)), points$est_total), ] %>% 
+    mutate(est_total = 1,
+           PointType = point_type) %>% 
+    rename(PointWeight = est_total) %>% 
+    select(-GEOID10)
+  
+  points_wmppp <- wmppp(
+    df = points_expanded,
+    window = owin(
+      xrange = range(points_expanded$x),
+      yrange = range(points_expanded$y)
+    )
+  )
+  
+  result_wmppp <- rjitter(points_wmppp, radius = 50, retry = TRUE)
+  return(result_wmppp)
+}
+
+wmppp.A_points <- expanded_wmppp(A_points, "A")
+wmppp.baseline <- expanded_wmppp(baseline_points, "baseline")
+wmppp.full <- superimpose(wmppp.A_points, wmppp.baseline)
+
+kd.A <- map_dfr(c("A","baseline"), function(rt) {
+  as.data.frame(Kdhat(
+  X = wmppp.full,
+  ReferenceType = rt,
+  NeighborType = rt,
+  Weighted = TRUE
+)) %>% 
+    mutate(type = rt)
+})
+
+plan(multisession, workers = availableCores() - 1)
+
+kdenv.A <- KdEnvelope(
+  X = wmppp.full,
+  ReferenceType = "A",
+  NumberOfSimulations = 100,
+  Alpha = 0.05,
+  Global = TRUE,
+  parallel = TRUE
 )
+```
+Plotting figures from above
 
-ggplot(data = mhat_lodes, aes(x=r,y=M)) +
+```{r}
+ggplot(data = kd.A, aes(x=r/1000,y=Kd,col=type)) +
   geom_line()
 
-ggplot(data = kd_lodes, aes(x=r,y=Kd,col=type)) +
-  geom_line()
+p.kd_ind <- ggplot(data = kdenv.A) + 
+  geom_line(aes(x=r/1000,y=obs)) +
+  geom_line(aes(x=r/1000,y=hi), linetype = "dashed") +
+  geom_line(aes(x=r/1000,y=lo), linetype = "dashed") +
+  theme_bw() +
+  ylab("K-Density") + xlab("Distance (km)")
+
+ggsave("figures/kd_ind.png", plot=p.kd_ind)
 ```
 
 ## Figures
@@ -474,4 +575,61 @@ p.lodes
 ggsave("figures/seattle_lodes.png", plot = p.lodes)
 ```
 
+## Testing Space
+
+Testing block sizes for inputs into rjitter. Find that median block size is around 50 meters, which seems like a reasonable input given that high tech establishments cluster in more dense urban areas with smaller block sizes.
+
+```{r}
+test_blocks <- blocks(
+  state = "WA",
+  county = "King"
+) %>% 
+  mutate(area = st_area(geometry),
+         rad = sqrt(area)/pi)
+
+median(test_blocks$rad)
+```
+
+Testing error induced by rounding for creating establishment points.
+
+```{r}
+# Actual establishments
+zbp_2019_long %>% filter(cbsa == "42660",
+                         est_desc == "est",
+                         naics %in% naics_codes) %>% 
+  summarise(n = sum(est)) %>% 
+  pull(n)
+
+# Current estimated
+sum(geo.block_est$est_total)
+
+# Choose parameter that approximates the previous sum
+test_points <- geo.block_est %>% 
+  mutate(est_total = round(0.17 + est_total))
+
+sum(test_points$est_total)
+
+# Construct new points 
+test_points_expanded <- test_points[rep(seq_len(nrow(test_points)), test_points$est_total), ] %>% 
+  mutate(est_total = 1,
+         PointType = "A") %>% 
+  rename(PointWeight = est_total) %>% 
+  select(-GEOID10)
+
+test_wmppp <- wmppp(
+  df = test_points_expanded,
+  window = owin(
+      xrange = range(test_points_expanded$x),
+      yrange = range(test_points_expanded$y)
+  )
+)
+
+test_wmppp_2 <- rjitter(test_wmppp, radius = 50, retry = TRUE)
+
+test_kd <- Kdhat(test_wmppp_2,
+                 ReferenceType = "A")
+
+ggplot(data = test_kd, aes(x=r/1000,y=Kd)) +
+  geom_line()
+```
 
