@@ -1,0 +1,118 @@
+---
+title: "agglomeration_lightweight"
+output: html_document
+date: "2026-03-03"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(scipen = 0, digits = 6)  
+if(!require('pacman')) {
+  install.packages('pacman')
+}
+pacman::p_load(ggplot2, dplyr, tidyverse, data.table, lubridate, ggpubr, skimr, scales, plotly, tidycensus, readxl, httr, jsonlite, sf, mapview, tigris, lehdr, spatstat, crsuggest, dbmss, stargazer, data.table, stringi) 
+options(tigris_use_cache = TRUE)
+```
+
+## Set up
+
+Initialize with complete set of crosswalk files (copied from agglomeration_main.Rmd). Use consistent nomenclature: 'cbsa', 'statefips', 'countyfips', 'fips', 'state_abbr', 'state_name'
+
+```{r}
+xwalk.cbsa_fips <- read_csv("https://data.nber.org/cbsa-csa-fips-county-crosswalk/2023/cbsa2fipsxw_2023.csv") %>% 
+  mutate(fips = paste0(fipsstatecode, fipscountycode)) %>% 
+  select(cbsa = cbsacode, statefips = fipsstatecode, countyfips = fipscountycode, fips)
+
+xwalk.state_fips <- fips_codes %>% 
+  select(state_abbr = state, state_name, statefips = state_code, county_name = county, countyfips = county_code)
+
+hud_key <- "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiI2IiwianRpIjoiOTkyMTgyZTJhMjMzYWIxYjg4ZTg0ZWNhNzc4YTgxZmUyZjBiMjI2YjBjN2I1Nzc2MDExZWE0NjQyMWYyMGVjMjM4M2U5MzVjOTQwNDQ2MGQiLCJpYXQiOjE3NjI1Mzg0NTEuMTcxNzA0LCJuYmYiOjE3NjI1Mzg0NTEuMTcxNzM4LCJleHAiOjIwNzgwNzEyNTEuMTU2ODU1LCJzdWIiOiIxMTI2MDMiLCJzY29wZXMiOltdfQ.VUVEmcDRysXhP5os4E3v9J4HrcFU10lycZShAQszZBUwyujCIMoFK_5WbKbKMRvvN9GJ_-mF3eJ_QcnIGuLGWg"
+hud_url <- "https://www.huduser.gov/hudapi/public/usps"
+
+response <- httr::GET(hud_url, 
+                      query = list(type = 2, query = "ALL", year = 2017),
+                      add_headers(Authorization = paste("Bearer", hud_key))
+)
+
+stop_for_status(response)
+json_data <- httr::content(response, as = "text", encoding = "UTF-8")
+df <- jsonlite::fromJSON(json_data)
+zip_county <- as.data.frame(df)
+
+response <- httr::GET(hud_url, 
+                      query = list(type = 3, query = "ALL", year = 2017),
+                      add_headers(Authorization = paste("Bearer", hud_key))
+)
+
+stop_for_status(response)
+json_data <- httr::content(response, as = "text", encoding = "UTF-8")
+df <- jsonlite::fromJSON(json_data)
+cbsa_zip <- as.data.frame(df)
+rm(df, json_data, response)
+
+# extract appropriate columns from both xwalks. preserve business ratio
+
+xwalk.zip_fips <- zip_county %>% 
+  rename(zip = data.results.zip,
+         county = data.results.geoid,
+         bus_ratio = data.results.bus_ratio) %>% 
+  select(fips = county, zip, bus_ratio)
+rm(zip_county)
+
+xwalk.zip_cbsa <- cbsa_zip %>% 
+  rename(cbsa = data.results.geoid,
+         zip = data.results.zip,
+         bus_ratio = data.results.bus_ratio) %>% 
+  select(cbsa, zip, bus_ratio)
+rm(cbsa_zip)
+```
+
+Find and clean ZBP data with CBSA matching
+
+```{r}
+zbp_path <- "C:/Users/phynm/OneDrive/Documents/thesis_data/zbp19detail.txt"
+zbp <- fread(zbp_path) %>% 
+  select(-c(city, stabbr, cty_name)) %>% 
+  mutate(across(`n<5`:`n1000`, ~ replace_na(as.numeric(.x), 0)),
+         zip = sprintf("%05d", zip)) %>% 
+  pivot_longer(
+    cols = `est`:`n1000`,
+    names_to = "est_desc",
+    values_to = "est"
+  ) %>% 
+  inner_join(xwalk.zip_cbsa, by = join_by(zip == zip), relationship = "many-to-many") %>% 
+  rename(bus_ratio_cbsa = bus_ratio) %>% 
+  mutate(adj_est = est * bus_ratio_cbsa) %>% 
+  filter(est_desc == "est") %>% 
+  select(-est_desc, -est, -bus_ratio_cbsa)
+```
+
+Get national block data
+
+```{r}
+blk <- fread("C:/Users/phynm/OneDrive/Documents/thesis_data/blocks_2020.csv")
+setDT(blk)
+blk[, fips := sprintf("%05.0f", GEOID20 / 1e10)]
+```
+
+## Function
+
+
+## Appendix
+
+Create a df with every TIGER block as indexed by central point.
+
+```{r}
+states <- state.abb
+
+get_block_coords <- function(st) {
+  blocks <- blocks(state = st, year = 2020)
+  st_drop_geometry(blocks) %>% 
+    select(GEOID20, INTPTLON20, INTPTLAT20)
+}
+
+us_block_coords <- map_df(states, get_block_coords)
+
+write_csv(us_block_coords, "C:/Users/phynm/OneDrive/Documents/thesis_data/blocks_2020.csv")
+```
+
