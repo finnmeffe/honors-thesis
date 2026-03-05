@@ -26,7 +26,7 @@ xwalk.cbsa_fips <- read_csv("https://data.nber.org/cbsa-csa-fips-county-crosswal
 xwalk.state_fips <- fips_codes %>% 
   select(state_abbr = state, state_name, statefips = state_code, county_name = county, countyfips = county_code)
 
-hud_key <- "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiI2IiwianRpIjoiOTkyMTgyZTJhMjMzYWIxYjg4ZTg0ZWNhNzc4YTgxZmUyZjBiMjI2YjBjN2I1Nzc2MDExZWE0NjQyMWYyMGVjMjM4M2U5MzVjOTQwNDQ2MGQiLCJpYXQiOjE3NjI1Mzg0NTEuMTcxNzA0LCJuYmYiOjE3NjI1Mzg0NTEuMTcxNzM4LCJleHAiOjIwNzgwNzEyNTEuMTU2ODU1LCJzdWIiOiIxMTI2MDMiLCJzY29wZXMiOltdfQ.VUVEmcDRysXhP5os4E3v9J4HrcFU10lycZShAQszZBUwyujCIMoFK_5WbKbKMRvvN9GJ_-mF3eJ_QcnIGuLGWg"
+hud_key <- read_file("hud_key.txt")
 hud_url <- "https://www.huduser.gov/hudapi/public/usps"
 
 response <- httr::GET(hud_url, 
@@ -67,11 +67,33 @@ xwalk.zip_cbsa <- cbsa_zip %>%
 rm(cbsa_zip)
 ```
 
+Get national block and LODES data, join for nation-wide df.
+
+```{r}
+# storage folder
+folder <- "C:/Users/phynm/OneDrive/Documents/thesis_data/"
+
+blk <- fread(file.path(folder, "blocks_2020.csv"))
+setDT(blk)
+blk[, fips := sprintf("%05.0f", GEOID20 / 1e10)]
+names(blk)
+setnames(blk, 
+         old = c("GEOID20","INTPTLON20","INTPTLAT20"), 
+         new = c("geoid","lon","lat"))
+
+lodes <- fread(file.path(folder, "lodes_2020.csv"))
+setDT(lodes)
+setnames(lodes,
+         old = "w_geocode", new = "geoid")
+
+blk <- blk %>% 
+  inner_join(lodes, by = "geoid")
+```
+
 Find and clean ZBP data with CBSA matching
 
 ```{r}
-zbp_path <- "C:/Users/phynm/OneDrive/Documents/thesis_data/zbp19detail.txt"
-zbp <- fread(zbp_path) %>% 
+zbp <- fread(file.path(folder, "zbp20detail.txt")) %>% 
   select(-c(city, stabbr, cty_name)) %>% 
   mutate(across(`n<5`:`n1000`, ~ replace_na(as.numeric(.x), 0)),
          zip = sprintf("%05d", zip)) %>% 
@@ -85,17 +107,88 @@ zbp <- fread(zbp_path) %>%
   mutate(adj_est = est * bus_ratio_cbsa) %>% 
   filter(est_desc == "est") %>% 
   select(-est_desc, -est, -bus_ratio_cbsa)
+
+setDT(zbp)
+
+# get a zcta sf as well
+sf.zcta <- zctas(
+  cb = TRUE,
+  year = 2020
+)
+
+# st_crs(sf.zcta)
 ```
 
-Get national block data
+Get a ZCTA match for each point
 
 ```{r}
-blk <- fread("C:/Users/phynm/OneDrive/Documents/thesis_data/blocks_2020.csv")
-setDT(blk)
-blk[, fips := sprintf("%05.0f", GEOID20 / 1e10)]
+sf.zcta <- zctas(
+  cb = TRUE,
+  year = 2020
+)
+
+sf.blk <- st_as_sf(blk, coords = c("lon", "lat"), crs = 4269)
+
+blk_zcta <- st_join(sf.blk, sf.zcta, join = st_within)
+setDT(blk_zcta)
+
+
 ```
 
+
+
 ## Function
+
+
+
+```{r}
+# want function to be
+# - set of NAICS codes
+# - min ests in cbsa
+# - distance at which kd is calculated
+
+n_naics <- c(5415)
+min_est <- 100
+
+
+format_naics <- function(codes) {
+  a <- as.character(codes)
+
+  b <- ifelse(
+    nchar(a) <= 2,
+    str_pad(a, width = 6, side = "right", pad = "-"),
+    str_pad(a, width = 6, side = "right", pad = "/")
+  )
+
+  return(b)
+}
+
+f_naics <- format_naics(n_naics) %>% 
+  append(c("31----","32----","33----")) # baseline
+
+f_zbp <- zbp %>% 
+  filter(naics %in% f_naics)
+
+
+
+# on a cbsa basis
+
+
+n_cbsa <- 35620
+n_fips <- xwalk.cbsa_fips %>% 
+  filter(
+    cbsa == n_cbsa
+  ) %>% 
+  pull(fips)
+
+c_lodes <- blk %>% 
+  filter(fips %in% n_fips)
+
+ggplot(data = c_lodes) +
+  geom_point(aes(x = lon, y = lat))
+
+
+```
 
 
 ## Appendix
@@ -103,6 +196,8 @@ blk[, fips := sprintf("%05.0f", GEOID20 / 1e10)]
 Create a df with every TIGER block as indexed by central point.
 
 ```{r}
+folder <- "C:/Users/phynm/OneDrive/Documents/thesis_data/"
+
 states <- state.abb
 
 get_block_coords <- function(st) {
@@ -113,6 +208,34 @@ get_block_coords <- function(st) {
 
 us_block_coords <- map_df(states, get_block_coords)
 
-write_csv(us_block_coords, "C:/Users/phynm/OneDrive/Documents/thesis_data/blocks_2020.csv")
+write_csv(us_block_coords, file.path(folder, "blocks_2020.csv"))
+```
+
+Fetch LODES data
+```{r}
+lodes <- function(st) {
+  grab_lodes(
+    st,
+    2020,
+    version = "LODES8",
+    lodes_type = "wac",
+    job_type = "JT00",
+    segment = "S000",
+    agg_geo = "block",
+    use_cache = TRUE
+  )
+}
+
+us_block_lodes <- map_df(states, possibly(
+  lodes,
+  otherwise = NULL,
+  quiet = FALSE)
+)
+
+names(us_block_lodes)
+simp <- us_block_lodes %>% 
+  select(w_geocode, starts_with("CNS"))
+
+write_csv(simp, file.path(folder, "lodes_2020.csv"))
 ```
 
