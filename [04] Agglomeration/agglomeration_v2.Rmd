@@ -6,7 +6,7 @@ date: "2026-03-03"
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-options(scipen = 0, digits = 6)  
+options(scipen = 10, digits = 6)  
 if(!require('pacman')) {
   install.packages('pacman')
 }
@@ -15,6 +15,13 @@ options(tigris_use_cache = TRUE)
 ```
 
 ## Set up
+
+Set the needed year:
+
+```{r}
+n_year <- 2020
+```
+
 
 Initialize with complete set of crosswalk files (copied from agglomeration_main.Rmd). Use consistent nomenclature: 'cbsa', 'statefips', 'countyfips', 'fips', 'state_abbr', 'state_name'
 
@@ -30,7 +37,7 @@ hud_key <- read_file("hud_key.txt")
 hud_url <- "https://www.huduser.gov/hudapi/public/usps"
 
 response <- httr::GET(hud_url, 
-                      query = list(type = 2, query = "ALL", year = 2017),
+                      query = list(type = 2, query = "ALL", year = n_year),
                       add_headers(Authorization = paste("Bearer", hud_key))
 )
 
@@ -40,7 +47,7 @@ df <- jsonlite::fromJSON(json_data)
 zip_county <- as.data.frame(df)
 
 response <- httr::GET(hud_url, 
-                      query = list(type = 3, query = "ALL", year = 2017),
+                      query = list(type = 3, query = "ALL", year = n_year),
                       add_headers(Authorization = paste("Bearer", hud_key))
 )
 
@@ -109,14 +116,6 @@ zbp <- fread(file.path(folder, "zbp20detail.txt")) %>%
   select(-est_desc, -est, -bus_ratio_cbsa)
 
 setDT(zbp)
-
-# get a zcta sf as well
-sf.zcta <- zctas(
-  cb = TRUE,
-  year = 2020
-)
-
-# st_crs(sf.zcta)
 ```
 
 Get a ZCTA match for each point (can take a bit, necessary for matching)
@@ -124,7 +123,7 @@ Get a ZCTA match for each point (can take a bit, necessary for matching)
 ```{r}
 sf.zcta <- zctas(
   cb = TRUE,
-  year = 2020
+  year = n_year
 ) %>% 
   select(zip = ZCTA5CE20)
 
@@ -142,11 +141,10 @@ xwalk.geoid_zip <- blk_zcta %>%
 
 ## Function
 
-Get the needed LODES data for the naics codes
+Set up all the needed helper functions for the creation of the final dataset
 
 ```{r}
-n_naics <- c(711130)
-
+# Format raw NAICS codes to be compatible with ZBP data
 format_naics <- function(codes) {
   a <- as.character(codes)
 
@@ -161,6 +159,7 @@ format_naics <- function(codes) {
   return(append(b, "31----"))
 }
 
+# Select needed cols from LODES data based on NAICS
 selected_lodes <- function(f_naics) {
   
 xwalk.cns_naics <- fread("data/cns_naics_xwalk.csv") %>% 
@@ -180,60 +179,58 @@ setDT(f_lodes)
 return(f_lodes)
 }
 
-
+# Similar to above, but simply return list of needed CNS by NAICS code
 naics_to_cns <- function(f_naics) {
   xwalk.cns_naics <- fread("data/cns_naics_xwalk.csv") %>% 
     mutate(naics = as.character(naics))
   
-f_cns <- xwalk.cns_naics %>% 
-  filter(naics %in% (substr(format_naics(f_naics), start = 1, stop = 2) %>% 
-           unique())
-  ) %>% 
-  pull(cns) %>% 
-  unique() 
-
-return(f_cns)
+  a <- format_naics(f_naics)
+  
+  map_chr(a, function(n) {
+    prefix <- substr(n, 1, 2)
+    xwalk.cns_naics %>%
+      filter(naics == prefix) %>%
+      pull(cns) %>%
+      .[[1]]
+  })
 }
 
-r_lodes <- selected_lodes(n_naics) %>% 
+# Join the selected points with ZCTAs (crosswalk created above)
+enrich_points <- function(f_naics) {
+
+f_lodes <- selected_lodes(f_naics) %>% 
   inner_join(xwalk.geoid_zip, by = "geoid")
 
-r_zbp <- zbp %>% 
-  filter(naics %in% format_naics(n_naics)) %>% 
+f_zbp <- zbp %>% 
+  filter(naics %in% format_naics(f_naics)) %>% 
   select(-name) %>% 
   pivot_wider(id_cols = c("zip","cbsa"),
               names_prefix = "naics",
               names_from = naics,
               values_from = adj_est)
 
-r_full <- inner_join(
-  r_lodes, r_zbp,
+f_full <- inner_join(
+  f_lodes, f_zbp,
   by = "zip",
   relationship = "many-to-many"
 ) %>% 
   filter(cbsa != "99999") # no rural areas
 
-enrich_points <- function(f_naics) {
-
-f_lodes <- selected_lodes(f_naics)
-
-f_zbp <- zbp %>% 
-  filter(naics %in% format_naics(f_naics)) %>% 
-  select(-name)
-
-
+return(f_full)
 }
 ```
 
-Create large LODES df 
+Primary matching function
 
 ```{r}
-match_establishments <- function(full_df, n_naics) {
+match_establishments <- function(f_naics) {
   
-  naics_cols <- paste0("naics", format_naics(n_naics))
-  cns_cols   <- naics_to_cns(n_naics)
+  full_df <- enrich_points(f_naics)
   
-  purrr::map2_dfr(naics_cols, cns_cols, function(naics_col, cns_col) {
+  naics_cols <- paste0("naics", format_naics(f_naics))
+  cns_cols   <- naics_to_cns(f_naics)
+  
+  map2_dfr(naics_cols, cns_cols, function(naics_col, cns_col) {
     
     full_df %>%
       filter(
@@ -246,23 +243,140 @@ match_establishments <- function(full_df, n_naics) {
         est_assigned = .data[[naics_col]] * weight   # fractional establishments per block
       ) %>%
       ungroup() %>%
-      mutate(naics = naics_col, cns = cns_col)
-  })
+      mutate(naics = sub("^naics", "", naics_col), cns = cns_col)
+  }) %>% 
+    select(geoid, est_assigned, naics, cbsa, zip)
 }
 
-t <- match_establishments(r_full, n_naics)
-
-v <- inner_join(
-  sf.blk,
-  t %>% 
-    filter(cbsa == "42660"),
-  by = "geoid"
-)
-
-ggplot(v) +
-  geom_sf()
+n_naics <- c(5112,5182,5417,5415)
+t <- match_establishments(n_naics)
 ```
 
+Distribute points to integers instead of fractions
+
+```{r}
+largest_remainder <- function(x) {
+  floored    <- floor(x)
+  remainder  <- x - floored
+  shortage   <- round(sum(x)) - sum(floored)
+  floored + (rank(-remainder, ties.method = "first") <= shortage)
+}
+
+# Apply within each ZIP NAICS group
+v <- t %>%
+  group_by(zip, naics) %>%
+  mutate(est_assigned_int = largest_remainder(est_assigned)) %>%
+  ungroup() %>% 
+  mutate(type =
+           ifelse(
+             naics == "31----",
+             "baseline", "A"
+           )
+  )
+
+w <- inner_join(
+  sf.blk, v, by = "geoid"
+)
+
+sum(v$est_assigned)
+sum(v$est_assigned_int)
+```
+
+
+Main KD estimating function
+
+```{r}
+kd_main <- function(match_df, f_cbsa, 
+                             n_sims = 100, alpha = 0.05, jitter_radius = 50) {
+  
+  f_cbsa <- as.character(f_cbsa)
+  
+  # Get needed epsg
+  epsg <- cbsa_proj %>% 
+    filter(cbsa == f_cbsa) %>% 
+    pull(epsg)
+  
+  # Filter CBSA
+  cbsa_df <- match_df %>%
+    filter(cbsa == f_cbsa) %>%
+    st_transform(epsg)
+  
+  coords <- st_coordinates(cbsa_df)
+  
+  cbsa_df <- cbsa_df %>%
+    st_drop_geometry() %>%
+    mutate(x = coords[, "X"], y = coords[, "Y"])
+  
+  # Build wmppp
+  expanded_wmppp <- function(points, point_type, est_col = "est_assigned_int") {
+  points[rep(seq_len(nrow(points)), points[[est_col]]), ] %>%
+    mutate(est_total = 1,
+           PointType  = point_type) %>%
+    rename(PointWeight = est_total) %>%
+    wmppp(
+      df     = .,
+      window = owin(xrange = range(.$x), yrange = range(.$y))
+    ) %>%
+    rjitter(radius = jitter_radius, retry = TRUE)
+  }
+
+  wmppp_a        <- cbsa_df %>% filter(type == "A")        %>% expanded_wmppp("A")
+  wmppp_baseline <- cbsa_df %>% filter(type == "baseline") %>% expanded_wmppp("baseline")
+  
+  wmppp_full <- superimpose(wmppp_a, wmppp_baseline)
+  
+  # Kd estimates
+  kd <- map_dfr(c("A", "baseline"), function(rt) {
+    as.data.frame(
+      Kdhat(X = wmppp_full, ReferenceType = rt, NeighborType = rt, Weighted = TRUE)
+    ) %>%
+      mutate(type = rt)
+  })
+  
+  # Envelope
+  # plan(multisession, workers = availableCores() - 1)
+  
+  kdenv <- KdEnvelope(
+    X                 = wmppp_full,
+    ReferenceType     = "A",
+    NumberOfSimulations = n_sims,
+    Alpha             = alpha,
+    Global            = TRUE,
+    parallel          = TRUE
+  )
+  
+  # plan(sequential)
+  
+  # Return
+  list(
+    cbsa     = cbsa_id,
+    wmppp    = wmppp_full,
+    kd       = kd,
+    kdenv    = kdenv
+  )
+}
+
+
+r <- kd_main(match_df = w,
+             f_cbsa = 42660,
+             )
+
+
+cbsa_ids <- unique(matched_df$cbsa)
+
+results <- map(cbsa_ids, function(id) {
+  message("Processing CBSA: ", id)
+  tryCatch(
+    compute_cbsa_kd(matched_df, cbsa_id = id, a_col = "est_a", baseline_col = "est_baseline"),
+    error = function(e) {
+      warning("CBSA ", id, " failed: ", e$message)
+      NULL
+    }
+  )
+}) %>%
+  setNames(cbsa_ids) %>%
+  compact()
+```
 
 
 ## Appendix
@@ -286,6 +400,7 @@ write_csv(us_block_coords, file.path(folder, "blocks_2020.csv"))
 ```
 
 Fetch LODES data
+
 ```{r}
 lodes <- function(st) {
   grab_lodes(
@@ -313,10 +428,33 @@ simp <- us_block_lodes %>%
 write_csv(simp, file.path(folder, "lodes_2020.csv"))
 ```
 
+Create a CBSA-UTM crosswalk to project points. First, create CBSA sf
+
 ```{r}
-y <- zbp$naics[substr(zbp$naics, 1, 2) == "32"] %>% 
-  unique()
+sf.cbsa <- counties(
+  state = NULL,
+  cb = TRUE,
+  year = n_year
+) %>% 
+  left_join(xwalk.cbsa_fips, by = join_by(GEOID == fips)) %>% 
+  select(cbsa) %>% 
+  filter(!is.na(cbsa)) %>% 
+  group_by(cbsa) %>%
+  summarise(geometry = st_union(geometry), .groups = "drop") %>%
+  st_as_sf()
 
-y
+lon_to_utm_epsg <- function(lon) {
+  zone <- floor((lon + 180) / 6) + 1
+  32600 + zone
+}
+
+# Get one centroid per CBSA to determine its UTM zone
+cbsa_proj <- sf.cbsa %>% 
+  mutate(
+    centroid = st_centroid(geometry),
+    lon      = st_coordinates(centroid)[, "X"],
+    epsg     = lon_to_utm_epsg(lon)
+  ) %>%
+  st_drop_geometry() %>%
+  select(cbsa, epsg)
 ```
-
