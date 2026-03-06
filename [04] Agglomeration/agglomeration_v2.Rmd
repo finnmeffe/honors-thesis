@@ -10,7 +10,7 @@ options(scipen = 10, digits = 6)
 if(!require('pacman')) {
   install.packages('pacman')
 }
-pacman::p_load(ggplot2, dplyr, tidyverse, data.table, lubridate, ggpubr, skimr, scales, plotly, tidycensus, readxl, httr, jsonlite, sf, mapview, tigris, lehdr, spatstat, crsuggest, dbmss, stargazer, data.table, stringi) 
+pacman::p_load(ggplot2, dplyr, tidyverse, data.table, lubridate, ggpubr, skimr, scales, plotly, tidycensus, readxl, httr, jsonlite, sf, mapview, tigris, lehdr, spatstat, crsuggest, dbmss, stargazer, data.table, stringi, future) 
 options(tigris_use_cache = TRUE)
 ```
 
@@ -95,6 +95,8 @@ setnames(lodes,
 
 blk <- blk %>% 
   inner_join(lodes, by = "geoid")
+
+rm(lodes)
 ```
 
 Find and clean ZBP data with CBSA matching
@@ -247,9 +249,6 @@ match_establishments <- function(f_naics) {
   }) %>% 
     select(geoid, est_assigned, naics, cbsa, zip)
 }
-
-n_naics <- c(5112,5182,5417,5415)
-t <- match_establishments(n_naics)
 ```
 
 Distribute points to integers instead of fractions
@@ -261,6 +260,9 @@ largest_remainder <- function(x) {
   shortage   <- round(sum(x)) - sum(floored)
   floored + (rank(-remainder, ties.method = "first") <= shortage)
 }
+
+n_naics <- c(5112,5182,5417,5415)
+t <- match_establishments(n_naics)
 
 # Apply within each ZIP NAICS group
 v <- t %>%
@@ -277,38 +279,21 @@ v <- t %>%
 w <- inner_join(
   sf.blk, v, by = "geoid"
 )
+rm(t,v)
 
-sum(v$est_assigned)
-sum(v$est_assigned_int)
+sum(w$est_assigned)
+sum(w$est_assigned_int)
+
+zbp %>% 
+  filter(naics %in% format_naics(n_naics)) %>% 
+  summarise(n = sum(adj_est))
 ```
 
 
 Main KD estimating function
 
 ```{r}
-kd_main <- function(match_df, f_cbsa, 
-                             n_sims = 100, alpha = 0.05, jitter_radius = 50) {
-  
-  f_cbsa <- as.character(f_cbsa)
-  
-  # Get needed epsg
-  epsg <- cbsa_proj %>% 
-    filter(cbsa == f_cbsa) %>% 
-    pull(epsg)
-  
-  # Filter CBSA
-  cbsa_df <- match_df %>%
-    filter(cbsa == f_cbsa) %>%
-    st_transform(epsg)
-  
-  coords <- st_coordinates(cbsa_df)
-  
-  cbsa_df <- cbsa_df %>%
-    st_drop_geometry() %>%
-    mutate(x = coords[, "X"], y = coords[, "Y"])
-  
-  # Build wmppp
-  expanded_wmppp <- function(points, point_type, est_col = "est_assigned_int") {
+expanded_wmppp <- function(points, point_type, est_col = "est_assigned_int") {
   points[rep(seq_len(nrow(points)), points[[est_col]]), ] %>%
     mutate(est_total = 1,
            PointType  = point_type) %>%
@@ -317,57 +302,77 @@ kd_main <- function(match_df, f_cbsa,
       df     = .,
       window = owin(xrange = range(.$x), yrange = range(.$y))
     ) %>%
-    rjitter(radius = jitter_radius, retry = TRUE)
+    rjitter(radius = 50, retry = TRUE)
   }
 
-  wmppp_a        <- cbsa_df %>% filter(type == "A")        %>% expanded_wmppp("A")
-  wmppp_baseline <- cbsa_df %>% filter(type == "baseline") %>% expanded_wmppp("baseline")
+kd_main <- function(match_df, f_cbsa) {
   
-  wmppp_full <- superimpose(wmppp_a, wmppp_baseline)
+f_cbsa <- as.character(f_cbsa)
+
+f_epsg <- cbsa_proj %>% 
+    filter(cbsa == f_cbsa) %>% 
+    pull(epsg)
+
+f_cbsa_df <- w %>%
+    filter(cbsa == f_cbsa) %>%
+    st_transform(f_epsg)
+
+f_coords <- st_coordinates(f_cbsa_df)
   
-  # Kd estimates
-  kd <- map_dfr(c("A", "baseline"), function(rt) {
-    as.data.frame(
-      Kdhat(X = wmppp_full, ReferenceType = rt, NeighborType = rt, Weighted = TRUE)
-    ) %>%
-      mutate(type = rt)
-  })
-  
-  # Envelope
-  # plan(multisession, workers = availableCores() - 1)
-  
-  kdenv <- KdEnvelope(
-    X                 = wmppp_full,
+f_cbsa_df <- f_cbsa_df %>%
+    st_drop_geometry() %>%
+    mutate(x = f_coords[, "X"], y = f_coords[, "Y"])
+
+f_wmppp_baseline <- f_cbsa_df %>% 
+  filter(type == "baseline") %>% 
+  expanded_wmppp("baseline")
+
+f_wmppp_a        <- f_cbsa_df %>% 
+  filter(type == "A")        %>% 
+  expanded_wmppp("A")
+
+f_wmppp_full <- superimpose(f_wmppp_a, f_wmppp_baseline)
+
+f_kdenv <- KdEnvelope(
+    X                 = f_wmppp_full,
+    r                 = c(0, 250, 500, 1000),
     ReferenceType     = "A",
-    NumberOfSimulations = n_sims,
-    Alpha             = alpha,
+    NumberOfSimulations = 100,
+    Alpha             = 0.05,
     Global            = TRUE,
-    parallel          = TRUE
+    parallel          = FALSE
   )
+
+# plan(sequential)
   
-  # plan(sequential)
-  
-  # Return
-  list(
-    cbsa     = cbsa_id,
-    wmppp    = wmppp_full,
-    kd       = kd,
-    kdenv    = kdenv
-  )
+
+return(f_kdenv)
 }
 
 
-r <- kd_main(match_df = w,
-             f_cbsa = 42660,
-             )
+t0 <- Sys.time()
+z <- kd_main(w, 35620)
+t1 <- Sys.time()
+elapsed <- t1 - t0
+elapsed
+```
 
+```{r}
+autoplot(z)
 
-cbsa_ids <- unique(matched_df$cbsa)
+cbsa_ids <- zbp %>% 
+  filter(naics %in% format_naics(n_naics),
+         cbsa != "99999") %>% 
+  group_by(cbsa) %>% 
+  summarise(n = sum(adj_est)) %>% 
+  arrange(-n) %>% 
+  slice(1:100) %>% 
+  pull(cbsa)
 
 results <- map(cbsa_ids, function(id) {
   message("Processing CBSA: ", id)
   tryCatch(
-    compute_cbsa_kd(matched_df, cbsa_id = id, a_col = "est_a", baseline_col = "est_baseline"),
+    kd_main(w, f_cbsa = id),
     error = function(e) {
       warning("CBSA ", id, " failed: ", e$message)
       NULL
@@ -376,6 +381,32 @@ results <- map(cbsa_ids, function(id) {
 }) %>%
   setNames(cbsa_ids) %>%
   compact()
+
+comb <- map_dfr(names(results), ~ 
+  as.data.frame(results[[.x]]) %>% mutate(cbsa = .x)
+) %>% 
+  mutate(gamma = pmax(obs - hi, 0))
+
+write_csv(comb, "data/kd_results.csv")
+```
+
+Data visualization
+
+```{r}
+t <- comb %>% 
+  filter(r != 0) %>% 
+  arrange(-gamma) %>% 
+  slice(1:20)
+t
+
+u <- w %>% 
+  filter(
+    cbsa == "10900",
+    type == "A",
+    est_assigned_int != 0
+  )
+
+mapview(u, zcol = "est_assigned_int")
 ```
 
 
