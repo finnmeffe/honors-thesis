@@ -204,6 +204,7 @@ zbp_2019_hhi <- naics_to_hhi(naics_codes)
 ggplot(data = zbp_2019_hhi, aes(x = log(total_est), y = hhi)) +
   geom_point()
 ```
+
 A clear pattern emerges from these HHIs: they are strongly decreasing in the total number of establishments within a CBSA. Intuitively, this makes sense, as there are likely just not enough establishments in smaller CBSAs to make the HHI meaningful.
 
 While this means the measure may not be capturing sufficient variance between similarly sized CBSAs, I perform a basic set of regressions to check feasibility.

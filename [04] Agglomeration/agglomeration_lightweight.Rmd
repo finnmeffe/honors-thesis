@@ -119,37 +119,33 @@ sf.zcta <- zctas(
 # st_crs(sf.zcta)
 ```
 
-Get a ZCTA match for each point
+Get a ZCTA match for each point (can take a bit, necessary for matching)
 
 ```{r}
 sf.zcta <- zctas(
   cb = TRUE,
   year = 2020
-)
+) %>% 
+  select(zip = ZCTA5CE20)
 
-sf.blk <- st_as_sf(blk, coords = c("lon", "lat"), crs = 4269)
+sf.blk <- st_as_sf(blk %>% 
+                     select(geoid, lon, lat),
+                   coords = c("lon", "lat"), crs = 4269)
 
 blk_zcta <- st_join(sf.blk, sf.zcta, join = st_within)
-setDT(blk_zcta)
-
-
+xwalk.geoid_zip <- blk_zcta %>% 
+  st_drop_geometry() %>% 
+  select(geoid, zip)
 ```
 
 
 
 ## Function
 
-
+Get the needed LODES data for the naics codes
 
 ```{r}
-# want function to be
-# - set of NAICS codes
-# - min ests in cbsa
-# - distance at which kd is calculated
-
-n_naics <- c(5415)
-min_est <- 100
-
+n_naics <- c(711130)
 
 format_naics <- function(codes) {
   a <- as.character(codes)
@@ -159,36 +155,114 @@ format_naics <- function(codes) {
     str_pad(a, width = 6, side = "right", pad = "-"),
     str_pad(a, width = 6, side = "right", pad = "/")
   )
+  
+  b
 
-  return(b)
+  return(append(b, "31----"))
 }
 
-f_naics <- format_naics(n_naics) %>% 
-  append(c("31----","32----","33----")) # baseline
+selected_lodes <- function(f_naics) {
+  
+xwalk.cns_naics <- fread("data/cns_naics_xwalk.csv") %>% 
+  mutate(naics = as.character(naics))
+  
+f_cns <- xwalk.cns_naics %>% 
+  filter(naics %in% (substr(format_naics(f_naics), start = 1, stop = 2) %>% 
+           unique())
+  ) %>% 
+  pull(cns) %>% 
+  unique()
+
+f_lodes <- blk %>% 
+  select(geoid, all_of(f_cns))
+setDT(f_lodes)
+
+return(f_lodes)
+}
+
+
+naics_to_cns <- function(f_naics) {
+  xwalk.cns_naics <- fread("data/cns_naics_xwalk.csv") %>% 
+    mutate(naics = as.character(naics))
+  
+f_cns <- xwalk.cns_naics %>% 
+  filter(naics %in% (substr(format_naics(f_naics), start = 1, stop = 2) %>% 
+           unique())
+  ) %>% 
+  pull(cns) %>% 
+  unique() 
+
+return(f_cns)
+}
+
+r_lodes <- selected_lodes(n_naics) %>% 
+  inner_join(xwalk.geoid_zip, by = "geoid")
+
+r_zbp <- zbp %>% 
+  filter(naics %in% format_naics(n_naics)) %>% 
+  select(-name) %>% 
+  pivot_wider(id_cols = c("zip","cbsa"),
+              names_prefix = "naics",
+              names_from = naics,
+              values_from = adj_est)
+
+r_full <- inner_join(
+  r_lodes, r_zbp,
+  by = "zip",
+  relationship = "many-to-many"
+) %>% 
+  filter(cbsa != "99999") # no rural areas
+
+enrich_points <- function(f_naics) {
+
+f_lodes <- selected_lodes(f_naics)
 
 f_zbp <- zbp %>% 
-  filter(naics %in% f_naics)
+  filter(naics %in% format_naics(f_naics)) %>% 
+  select(-name)
 
 
-
-# on a cbsa basis
-
-
-n_cbsa <- 35620
-n_fips <- xwalk.cbsa_fips %>% 
-  filter(
-    cbsa == n_cbsa
-  ) %>% 
-  pull(fips)
-
-c_lodes <- blk %>% 
-  filter(fips %in% n_fips)
-
-ggplot(data = c_lodes) +
-  geom_point(aes(x = lon, y = lat))
-
-
+}
 ```
+
+Create large LODES df 
+
+```{r}
+match_establishments <- function(full_df, n_naics) {
+  
+  naics_cols <- paste0("naics", format_naics(n_naics))
+  cns_cols   <- naics_to_cns(n_naics)
+  
+  purrr::map2_dfr(naics_cols, cns_cols, function(naics_col, cns_col) {
+    
+    full_df %>%
+      filter(
+        !is.na(.data[[naics_col]]), .data[[naics_col]] > 0,
+        !is.na(.data[[cns_col]]),   .data[[cns_col]]  > 0
+      ) %>%
+      group_by(zip) %>%
+      mutate(
+        weight      = .data[[cns_col]] / sum(.data[[cns_col]], na.rm = TRUE),
+        est_assigned = .data[[naics_col]] * weight   # fractional establishments per block
+      ) %>%
+      ungroup() %>%
+      mutate(naics = naics_col, cns = cns_col)
+  })
+}
+
+t <- match_establishments(r_full, n_naics)
+
+v <- inner_join(
+  sf.blk,
+  t %>% 
+    filter(cbsa == "42660"),
+  by = "geoid"
+)
+
+ggplot(v) +
+  geom_sf()
+```
+
 
 
 ## Appendix
@@ -237,5 +311,12 @@ simp <- us_block_lodes %>%
   select(w_geocode, starts_with("CNS"))
 
 write_csv(simp, file.path(folder, "lodes_2020.csv"))
+```
+
+```{r}
+y <- zbp$naics[substr(zbp$naics, 1, 2) == "32"] %>% 
+  unique()
+
+y
 ```
 
