@@ -341,12 +341,12 @@ return(f_kdenv)
 }
 
 # id fetch
-get_ids <- function(threshold) {
+get_ids <- function(threshold, f_naics) {
 
   threshold <- as.numeric(threshold)
   
 cbsa_ids <- zbp %>% 
-  filter(naics %in% format_naics(n_naics),
+  filter(naics %in% format_naics(f_naics),
          cbsa != "99999") %>% 
   group_by(cbsa) %>% 
   summarise(n = sum(adj_est)) %>% 
@@ -366,13 +366,13 @@ I separate out the different parts of the function for easier checks against err
 t0 <- Sys.time()
 
 # Enter needed NAICS codes
-n_naics <- c(5112,5182,5417,5415)
+n_naics <- c(71)
 
 x <- match_establishments(n_naics)
 y <- format_match(x)
 
 # Choose the threshold for establishments (set at 250 for CBSA)
-i <- get_ids(250)
+i <- get_ids(250, n_naics)
 
 r_kd <- map(i, function(id) {
   message("Processing CBSA: ", id)
@@ -396,7 +396,7 @@ t1 <- Sys.time()
 elapsed <- t1 - t0
 elapsed
 
-write_csv(r_final, "")
+write_csv(r_final, "data/kd_creative.csv")
 ```
 
 ## Data visualization
@@ -498,6 +498,19 @@ cbsa_proj <- sf.cbsa %>%
   st_drop_geometry() %>%
   select(cbsa, epsg)
 ```
+
+ZBP NAICS look up
+
+```{r}
+all_codes <- zbp %>% 
+  select(naics) %>% 
+  unique() %>% 
+  pull(naics)
+
+all_codes %>% 
+  filter(starts_with("71"))
+```
+
 
 Old version of the main call
 
