@@ -261,11 +261,8 @@ largest_remainder <- function(x) {
   floored + (rank(-remainder, ties.method = "first") <= shortage)
 }
 
-n_naics <- c(5112,5182,5417,5415)
-t <- match_establishments(n_naics)
-
-# Apply within each ZIP NAICS group
-v <- t %>%
+format_match <- function(df) {
+  f_v <- df %>%
   group_by(zip, naics) %>%
   mutate(est_assigned_int = largest_remainder(est_assigned)) %>%
   ungroup() %>% 
@@ -275,22 +272,16 @@ v <- t %>%
              "baseline", "A"
            )
   )
-
-w <- inner_join(
-  sf.blk, v, by = "geoid"
+  
+  f_w <- inner_join(
+  sf.blk, f_v, by = "geoid"
 )
-rm(t,v)
-
-sum(w$est_assigned)
-sum(w$est_assigned_int)
-
-zbp %>% 
-  filter(naics %in% format_naics(n_naics)) %>% 
-  summarise(n = sum(adj_est))
+  
+  return(f_w)
+}
 ```
 
-
-Main KD estimating function
+KD estimating function
 
 ```{r}
 expanded_wmppp <- function(points, point_type, est_col = "est_assigned_int") {
@@ -349,48 +340,66 @@ f_kdenv <- KdEnvelope(
 return(f_kdenv)
 }
 
+# id fetch
+get_ids <- function(threshold) {
 
-t0 <- Sys.time()
-z <- kd_main(w, 35620)
-t1 <- Sys.time()
-elapsed <- t1 - t0
-elapsed
-```
-
-```{r}
-autoplot(z)
-
+  threshold <- as.numeric(threshold)
+  
 cbsa_ids <- zbp %>% 
   filter(naics %in% format_naics(n_naics),
          cbsa != "99999") %>% 
   group_by(cbsa) %>% 
   summarise(n = sum(adj_est)) %>% 
   arrange(-n) %>% 
-  slice(1:100) %>% 
+  filter(n >= threshold) %>% 
   pull(cbsa)
 
-results <- map(cbsa_ids, function(id) {
+return(cbsa_ids)
+}
+```
+
+## Main call
+
+I separate out the different parts of the function for easier checks against errors.
+
+```{r}
+t0 <- Sys.time()
+
+# Enter needed NAICS codes
+n_naics <- c(5112,5182,5417,5415)
+
+x <- match_establishments(n_naics)
+y <- format_match(x)
+
+# Choose the threshold for establishments (set at 250 for CBSA)
+i <- get_ids(250)
+
+r_kd <- map(i, function(id) {
   message("Processing CBSA: ", id)
   tryCatch(
-    kd_main(w, f_cbsa = id),
+    kd_main(y, f_cbsa = id),
     error = function(e) {
       warning("CBSA ", id, " failed: ", e$message)
       NULL
     }
   )
 }) %>%
-  setNames(cbsa_ids) %>%
+  setNames(i) %>%
   compact()
 
-comb <- map_dfr(names(results), ~ 
-  as.data.frame(results[[.x]]) %>% mutate(cbsa = .x)
+r_final <- map_dfr(names(r_kd), ~ 
+  as.data.frame(r_kd[[.x]]) %>% mutate(cbsa = .x)
 ) %>% 
   mutate(gamma = pmax(obs - hi, 0))
 
-write_csv(comb, "data/kd_results.csv")
+t1 <- Sys.time()
+elapsed <- t1 - t0
+elapsed
+
+write_csv(r_final, "")
 ```
 
-Data visualization
+## Data visualization
 
 ```{r}
 t <- comb %>% 
@@ -401,7 +410,7 @@ t
 
 u <- w %>% 
   filter(
-    cbsa == "10900",
+    cbsa == "14460",
     type == "A",
     est_assigned_int != 0
   )
@@ -489,3 +498,58 @@ cbsa_proj <- sf.cbsa %>%
   st_drop_geometry() %>%
   select(cbsa, epsg)
 ```
+
+Old version of the main call
+
+```{r}
+autoplot(z)
+
+cbsa_ids <- zbp %>% 
+  filter(naics %in% format_naics(n_naics),
+         cbsa != "99999") %>% 
+  group_by(cbsa) %>% 
+  summarise(n = sum(adj_est)) %>% 
+  arrange(-n) %>% 
+  filter(n >= 100) %>% 
+  slice(1:100) %>% 
+  pull(cbsa)
+
+cbsa_ids2 <- zbp %>% 
+  filter(naics %in% format_naics(n_naics),
+         cbsa != "99999") %>% 
+  group_by(cbsa) %>% 
+  summarise(n = sum(adj_est)) %>% 
+  arrange(-n) %>% 
+  filter(n >= 250) %>% 
+  slice(101:207) %>% 
+  pull(cbsa) 
+
+results2 <- map(cbsa_ids2, function(id) {
+  message("Processing CBSA: ", id)
+  tryCatch(
+    kd_main(w, f_cbsa = id),
+    error = function(e) {
+      warning("CBSA ", id, " failed: ", e$message)
+      NULL
+    }
+  )
+}) %>%
+  setNames(cbsa_ids2) %>%
+  compact()
+
+comb <- map_dfr(names(results), ~ 
+  as.data.frame(results[[.x]]) %>% mutate(cbsa = .x)
+) %>% 
+  mutate(gamma = pmax(obs - hi, 0))
+
+comb2 <- map_dfr(names(results2), ~ 
+  as.data.frame(results2[[.x]]) %>% mutate(cbsa = .x)
+) %>% 
+  mutate(gamma = pmax(obs - hi, 0))
+
+c <- bind_rows(comb, comb2)
+
+write_csv(c, "data/kd_tech.csv")
+```
+
+
