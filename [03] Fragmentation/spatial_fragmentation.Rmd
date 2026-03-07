@@ -526,4 +526,50 @@ combined_circ %>%
   pack_rows("Bottom 10", 11, 20, latex_gap_space = "0.7em") %>%
   save_kable("figures/spat_frag_sumstats_circ.tex")
 ```
+```{r}
+p.hhi_rect <- ggplot(data = df.top_100 %>% 
+         pivot_longer(
+           cols = c(index_rect, index_rect_central),
+           names_to = "type",
+           values_to = "value"
+         ),
+       aes(x = hhi_pop_muni, y = value, col = type)) +
+  geom_point() +
+  geom_smooth(se = FALSE, method = "lm") +
+  scale_color_manual(values = c(
+    "index_rect" = "red",
+    "index_rect_central" = "blue"),
+    labels = c("Full Sample","Central Cities")
+  ) +
+  theme_bw() +
+  xlab("HHI - Population") + ylab("SDI - Rectangular Bounding") +
+  labs(col = "SDI Type")
+
+p.hhi_circ <- ggplot(data = df.top_100 %>% 
+         pivot_longer(
+           cols = c(index_circ, index_circ_central),
+           names_to = "type",
+           values_to = "value"
+         ),
+       aes(x = hhi_pop_muni, y = value, col = type)) +
+  geom_point() +
+  geom_smooth(se = FALSE, method = "lm") +
+  scale_color_manual(values = c(
+    "index_circ" = "red",
+    "index_circ_central" = "blue"),
+    labels = c("Full Sample","Central Cities")
+  ) +
+  theme_bw() +
+  xlab("HHI - Population") + ylab("SDI - Circular Bounding") +
+  labs(col = "SDI Type")
+
+ggsave("figures/hhi_rect.png", plot = p.hhi_rect)
+ggsave("figures/hhi_circ.png", plot = p.hhi_circ)
+
+summary(lm(index_rect ~ hhi_pop_muni, data = df.top_100))
+summary(lm(index_rect_central ~ hhi_pop_muni, data = df.top_100))
+summary(lm(index_circ ~ hhi_pop_muni, data = df.top_100))
+summary(lm(index_circ_central ~ hhi_pop_muni, data = df.top_100))
+
+```
 
