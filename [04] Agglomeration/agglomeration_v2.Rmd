@@ -399,7 +399,14 @@ elapsed
 write_csv(r_final, "data/kd_creative.csv")
 ```
 
-## Data visualization
+## Figures
+
+```{r}
+
+```
+
+
+## Appendix 1: Data visualization
 
 ```{r}
 t <- comb %>% 
@@ -419,7 +426,7 @@ mapview(u, zcol = "est_assigned_int")
 ```
 
 
-## Appendix
+## Appendix 2: Large data load
 
 Create a df with every TIGER block as indexed by central point.
 
@@ -498,6 +505,8 @@ cbsa_proj <- sf.cbsa %>%
   st_drop_geometry() %>%
   select(cbsa, epsg)
 ```
+
+## Appendix 3: Testing space
 
 ZBP NAICS look up
 
