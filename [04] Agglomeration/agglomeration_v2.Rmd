@@ -10,9 +10,10 @@ options(scipen = 10, digits = 6)
 if(!require('pacman')) {
   install.packages('pacman')
 }
-pacman::p_load(ggplot2, dplyr, tidyverse, data.table, lubridate, ggpubr, skimr, scales, plotly, tidycensus, readxl, httr, jsonlite, sf, mapview, tigris, lehdr, spatstat, crsuggest, dbmss, stargazer, data.table, stringi, future) 
+pacman::p_load(ggplot2, dplyr, tidyverse, data.table, lubridate, ggpubr, skimr, scales, plotly, tidycensus, readxl, httr, jsonlite, sf, mapview, tigris, lehdr, spatstat, crsuggest, dbmss, stargazer, data.table, stringi, future, modelsummary) 
 options(tigris_use_cache = TRUE)
 ```
+
 
 ## Set up
 
@@ -402,7 +403,38 @@ write_csv(r_final, "data/kd_creative.csv")
 ## Figures
 
 ```{r}
+fig <- as.data.frame(read_csv("data/kd_tech.csv")) %>% 
+  filter(r != 0)
 
+datasummary(
+  factor(r, labels = c("250m", "500m", "1000m")) *
+  ((`obs` = obs) + 
+   (`lo` = lo) + 
+   (`hi` = hi) +
+   (`gam` = gamma)) ~ 
+  N + Mean + SD + P25 + Median + P75,
+  data = fig,
+  fmt = function(x) formatC(x, digits = 6, format = "f"),
+  output = "latex"
+)
+
+fig %>% 
+  filter(gamma != 0,
+         r == 250) %>% 
+  summarise(n = n()) %>% 
+  pull(n) / 197
+
+fig %>% 
+  filter(gamma != 0,
+         r == 500) %>% 
+  summarise(n = n()) %>% 
+  pull(n) / 197
+
+fig %>% 
+  filter(gamma != 0,
+         r == 1000) %>% 
+  summarise(n = n()) %>% 
+  pull(n) / 197
 ```
 
 
