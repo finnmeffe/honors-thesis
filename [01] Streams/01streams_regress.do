@@ -1,4 +1,5 @@
-cd "C:\Users\phynm\OneDrive\Documents\GitHub\honors-thesis/[01] Streams/data"
+global path "C:\Users\phynm\OneDrive\Documents\GitHub\honors-thesis/[01] Streams"
+cd "$path/data"
 clear
 
 use cbsa_streams
@@ -36,7 +37,7 @@ esttab, ///
 	se ///
     stats(statefe r2 N, labels("State FE" "R-squared" "Observations"))
 
-esttab m1 m3 m2 m4 using stream_iv.tex, ///
+esttab m1 m3 m2 m4 using "$path/figures/stream_iv.tex", ///
     label se ///
 	mtitles("" "" "" "") ///
 	mgroups("Number of Municipalities" "Population HHI", ///
