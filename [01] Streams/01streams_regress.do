@@ -3,33 +3,31 @@ clear
 
 use cbsa_streams
 
-label variable num_muns_pp "Municipalities per capita"
-label variable total_population "Total Population"
+label variable munis_pp "Municipalities per capita"
+label variable pop_muni "Total Population"
 label variable stream_length_meters "Stream Length (meters)"
 label variable aland "Land Area (meters)"
-label variable hhi_population "Population HHI"
+label variable hhi_pop_muni "Population HHI"
 label variable streams_per_area "Streams / Area"
 label variable greatlake "On Great Lakes"
 label variable ocean "On Ocean"
 label variable sd_areatri "Terrain Ruggedness"
 
-encode state, gen(state_id)
-
 eststo clear 
 
-quietly regress num_municipalities stream_length_meters
+quietly regress num_munis stream_length_meters
 estadd local statefe "No"
 eststo m1
 
-quietly reghdfe num_municipalities stream_length_meters greatlake ocean sd_areatri aland total_population, absorb(state_id)
+quietly reghdfe num_munis stream_length_meters greatlake ocean sd_areatri aland pop_muni, absorb(state_id)
 estadd local statefe "Yes"
 eststo m3
 
-quietly regress hhi_population stream_length_meters
+quietly regress hhi_pop_muni stream_length_meters
 estadd local statefe "No"
 eststo m2
 
-quietly reghdfe hhi_population stream_length_meters greatlake ocean sd_areatri aland, absorb(state_id)
+quietly reghdfe hhi_pop_muni stream_length_meters greatlake ocean sd_areatri aland, absorb(state_id)
 estadd local statefe "Yes"
 eststo m4
 

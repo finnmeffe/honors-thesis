@@ -92,5 +92,6 @@ replace multistate = 1 if len_state > 2
 replace state = substr(state, 1, 2)
 drop len_state
 
+encode state, gen(state_id)
 save cbsa_streams, replace
 
