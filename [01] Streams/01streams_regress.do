@@ -14,13 +14,15 @@ label variable greatlake "On Great Lakes"
 label variable ocean "On Ocean"
 label variable sd_areatri "Terrain Ruggedness"
 
+drop if cbsa_type == "Micropolitan Statistical Area"
+
 eststo clear 
 
 quietly regress num_munis stream_length_meters
 estadd local statefe "No"
 eststo m1
 
-quietly reghdfe num_munis stream_length_meters greatlake ocean sd_areatri aland pop_muni, absorb(state_id)
+quietly reghdfe num_munis stream_length_meters greatlake ocean sd_areatri aland pop_muni, absorb(state_id) cluster(state_id)
 estadd local statefe "Yes"
 eststo m3
 
@@ -28,7 +30,7 @@ quietly regress hhi_pop_muni stream_length_meters
 estadd local statefe "No"
 eststo m2
 
-quietly reghdfe hhi_pop_muni stream_length_meters greatlake ocean sd_areatri aland, absorb(state_id)
+quietly reghdfe hhi_pop_muni stream_length_meters greatlake ocean sd_areatri aland, absorb(state_id) cluster(state_id)
 estadd local statefe "Yes"
 eststo m4
 
