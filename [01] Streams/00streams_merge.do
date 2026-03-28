@@ -8,9 +8,11 @@ clear
 /////////////////////////////////////
 
 cd "$frag"
-import delimited fragmentation_basic
+import delimited fragmentation_full
+destring index_circ, replace force
+destring index_rect, replace force
 cd "$streams"
-save fragmentation_basic, replace
+save fragmentation_full, replace
 clear
 
 import delimited cbsa_streams
@@ -18,12 +20,12 @@ keep cbsafp name memi aland awater stream_length_meters stream_length_miles
 rename cbsafp cbsacode
 save cbsa_streams.dta, replace
 
-merge 1:1 cbsacode using fragmentation_basic
+merge 1:1 cbsacode using fragmentation_full
 drop if _merge != 3
 drop _merge name
 
 save cbsa_streams, replace
-erase fragmentation_basic.dta
+erase fragmentation_full.dta
 clear
 
 ////////////////////////////////
