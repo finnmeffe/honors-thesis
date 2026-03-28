@@ -5,7 +5,7 @@ global agg_dir "$path/[04] Agglomeration/data"
 
 // Import agglomeration and fragmentation data from respective folders
 
-cd "$path/[05] Experimental/data"
+cd "$path/[05] Results/data"
 
 import delimited "$agg_dir/kd_tech.csv", clear 
 
