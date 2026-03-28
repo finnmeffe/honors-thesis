@@ -368,6 +368,7 @@ t0 <- Sys.time()
 
 # Enter needed NAICS codes
 n_naics <- c(71)
+# n_naics <- c(5112,5182,5417,5415) # previous for high-tech data
 
 x <- match_establishments(n_naics)
 y <- format_match(x)
