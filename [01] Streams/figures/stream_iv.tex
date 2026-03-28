@@ -1,37 +1,37 @@
 {
 \def\sym#1{\ifmmode^{#1}\else\(^{#1}\)\fi}
-\begin{tabular}{l*{4}{c}}
+\begin{tabular}{l*{6}{c}}
 \hline\hline
-                    &\multicolumn{1}{c}{Number of Municipalities}&\multicolumn{3}{c}{Population HHI}                               \\
-                    &\multicolumn{1}{c}{(1)}&\multicolumn{1}{c}{(2)}&\multicolumn{1}{c}{(3)}&\multicolumn{1}{c}{(4)}\\
-                    &\multicolumn{1}{c}{} &\multicolumn{1}{c}{} &\multicolumn{1}{c}{} &\multicolumn{1}{c}{} \\
+                    &\multicolumn{1}{c}{Number of Municipalities}&\multicolumn{5}{c}{Population HHI}                                                                           \\
+                    &\multicolumn{1}{c}{(1)}&\multicolumn{1}{c}{(2)}&\multicolumn{1}{c}{(3)}&\multicolumn{1}{c}{(4)}&\multicolumn{1}{c}{(5)}&\multicolumn{1}{c}{(6)}\\
+                    &\multicolumn{1}{c}{} &\multicolumn{1}{c}{} &\multicolumn{1}{c}{} &\multicolumn{1}{c}{} &\multicolumn{1}{c}{m5}&\multicolumn{1}{c}{m6}\\
 \hline
-Stream Length (meters)&   0.0000133\sym{***}&   0.0000158         &   -1.94e-08         &   -6.47e-08         \\
-                    &(0.00000192)         &(0.00000789)         &  (1.17e-08)         &  (4.68e-08)         \\
+Stream Length (meters)&   0.0000133\sym{***}&   0.0000158\sym{***}&   -1.94e-08         &   -6.47e-08         &   -4.84e-09         &   -4.96e-10         \\
+                    &(0.00000192)         &(0.00000222)         &  (1.17e-08)         &  (4.68e-08)         &  (4.11e-09)         &  (4.67e-09)         \\
 [1em]
-On Great Lakes      &                     &       3.350         &                     &     -0.0451         \\
-                    &                     &     (6.492)         &                     &    (0.0421)         \\
+On Great Lakes      &                     &       3.350         &                     &     -0.0451         &                     &     -0.0309         \\
+                    &                     &     (5.579)         &                     &    (0.0421)         &                     &    (0.0230)         \\
 [1em]
-On Ocean            &                     &      -6.267         &                     &     -0.0531         \\
-                    &                     &     (3.241)         &                     &    (0.0334)         \\
+On Ocean            &                     &      -6.267         &                     &     -0.0531         &                     &     -0.0208         \\
+                    &                     &     (3.731)         &                     &    (0.0334)         &                     &    (0.0133)         \\
 [1em]
-Terrain Ruggedness  &                     &      -0.186         &                     &     0.00226         \\
-                    &                     &     (0.140)         &                     &   (0.00126)         \\
+Terrain Ruggedness  &                     &      -0.186         &                     &     0.00226         &                     &    0.000285         \\
+                    &                     &     (0.174)         &                     &   (0.00126)         &                     &  (0.000657)         \\
 [1em]
-Land Area (meters)  &                     &   -1.63e-10         &                     &   -5.13e-12\sym{*}  \\
-                    &                     &  (2.19e-10)         &                     &  (2.51e-12)         \\
+Land Area (meters)  &                     &   -1.63e-10         &                     &   -5.13e-12\sym{*}  &                     &   -1.01e-12\sym{**} \\
+                    &                     &  (2.70e-10)         &                     &  (2.51e-12)         &                     &  (3.67e-13)         \\
 [1em]
-Total Population    &                     &   0.0000230\sym{***}&                     &                     \\
-                    &                     &(0.00000432)         &                     &                     \\
+Total Population    &                     &   0.0000230\sym{***}&                     &                     &                     &                     \\
+                    &                     &(0.00000107)         &                     &                     &                     &                     \\
 [1em]
-Constant            &       15.25\sym{***}&       6.627         &       0.439\sym{***}&       0.497\sym{***}\\
-                    &     (2.408)         &     (4.816)         &    (0.0147)         &    (0.0300)         \\
+Constant            &       15.25\sym{***}&       6.627\sym{*}  &       0.439\sym{***}&       0.497\sym{***}&       0.623\sym{***}&       0.498\sym{***}\\
+                    &     (2.408)         &     (2.703)         &    (0.0147)         &    (0.0300)         &   (0.00519)         &   (0.00700)         \\
 \hline
-State FE            &          No         &         Yes         &          No         &         Yes         \\
-R-squared           &       0.112         &       0.759         &     0.00714         &       0.398         \\
-Observations        &         386         &         380         &         386         &         380         \\
+State FE            &          No         &         Yes         &          No         &         Yes         &          No         &         Yes         \\
+R-squared           &       0.112         &       0.759         &     0.00714         &       0.398         &     0.00371         &       0.459         \\
+Observations        &         386         &         380         &         386         &         380         &         375         &         370         \\
 \hline\hline
-\multicolumn{5}{l}{\footnotesize Standard errors in parentheses}\\
-\multicolumn{5}{l}{\footnotesize \sym{*} \(p<0.05\), \sym{**} \(p<0.01\), \sym{***} \(p<0.001\)}\\
+\multicolumn{7}{l}{\footnotesize Standard errors in parentheses}\\
+\multicolumn{7}{l}{\footnotesize \sym{*} \(p<0.05\), \sym{**} \(p<0.01\), \sym{***} \(p<0.001\)}\\
 \end{tabular}
 }

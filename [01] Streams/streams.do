@@ -97,6 +97,10 @@ drop len_state
 encode state, gen(state_id)
 save cbsa_streams, replace
 
+///////////////
+*IV FIRST STAGE
+///////////////
+
 use cbsa_streams, clear
 
 label variable munis_pp "Municipalities per capita"
