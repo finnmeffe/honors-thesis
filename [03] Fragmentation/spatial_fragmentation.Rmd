@@ -97,7 +97,7 @@ Next, I select a CBSA (in this case, Seattle), and find the requisite counties a
 ```{r}
 # initialize with CBSA code
 
-needed_cbsacode = "42660"
+needed_cbsacode = "16980"
 
 needed_fips <- xwalk.cbsa_county %>% 
   filter(grepl(needed_cbsacode,cbsacode)) %>% 
@@ -114,8 +114,8 @@ sf.places <-
     sf.counties %>% 
       filter(GEOID %in% c(needed_fips)) %>% 
       select()
-  ) %>% 
-  filter(LSAD %in% c("25","43"))
+  ) #%>% 
+  #filter(LSAD %in% c("25","43"))
 
 needed_crs <- suggest_crs(sf.places) %>% 
   filter(crs_units == "m") %>% 
@@ -337,12 +337,13 @@ I now begin the formal assembly of CBSA scores. Here, only the top 100 MSAs are 
 
 ```{r}
 # get the top 100 MSAs by population
-df.frag_index <- read_csv("data/fragmentation_basic.csv") %>% 
+df.frag_index2 <- read_csv("data/fragmentation_basic.csv") %>% 
   arrange(-pop_total) %>% 
-  slice(1:100)
+  filter(cbsa_type == "Metropolitan Statistical Area") %>% 
+  slice(101:386)
 
 # perform the spatial difference index function
-df.frag_index <- df.frag_index %>% 
+df.frag_index2 <- df.frag_index2 %>% 
   mutate(output = map(cbsacode, safe_get_spat_diff_index, .progress = TRUE)) %>% 
   unnest(output)
 
@@ -351,7 +352,9 @@ ggplot(data = df.frag_index, aes(x = hhi_pop_total, y = index_rect)) +
   geom_point() +
   geom_smooth(method = "lm")
 
-write.csv(df.frag_index, file = "data/fragmentation_top_100.csv", row.names = FALSE)
+df.frag_index_full <- rbind(df.frag_index, df.frag_index2)
+
+write.csv(df.frag_index_full, file = "data/fragmentation_full.csv", row.names = FALSE)
 ```
 
 I also perform an analysis that centers on the "central cities" of each CBSA (as defined by Census naming conventions, though this can be restructured to just include the largest city in each CBSA).
@@ -572,4 +575,13 @@ summary(lm(index_circ ~ hhi_pop_muni, data = df.top_100))
 summary(lm(index_circ_central ~ hhi_pop_muni, data = df.top_100))
 
 ```
+
+Simple figure for MSA boundaries
+
+```{r}
+ggplot(data = sf.places) +
+  geom_sf() +
+  theme_void()
+```
+
 
