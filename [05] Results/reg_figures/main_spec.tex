@@ -1,0 +1,52 @@
+{
+\def\sym#1{\ifmmode^{#1}\else\(^{#1}\)\fi}
+\begin{tabular}{l*{8}{c}}
+\hline\hline
+                    &     r = 250         &                     &     r = 500         &                     &    r = 1000         &                     &                     &                     \\
+                    &\multicolumn{1}{c}{(1)}&\multicolumn{1}{c}{(2)}&\multicolumn{1}{c}{(3)}&\multicolumn{1}{c}{(4)}&\multicolumn{1}{c}{(5)}&\multicolumn{1}{c}{(6)}&\multicolumn{1}{c}{(7)}&\multicolumn{1}{c}{(8)}\\
+                    &\multicolumn{1}{c}{} &\multicolumn{1}{c}{} &\multicolumn{1}{c}{} &\multicolumn{1}{c}{} &\multicolumn{1}{c}{} &\multicolumn{1}{c}{} &\multicolumn{1}{c}{m1\_1000}&\multicolumn{1}{c}{m2\_1000}\\
+\hline
+main                &                     &                     &                     &                     &                     &                     &                     &                     \\
+\# Munis            &     0.00533\sym{***}&      0.0269\sym{***}&   -5.62e-08         &    4.99e-08         &-0.000000140\sym{*}  &-0.000000142         &-0.000000131\sym{**} &    1.73e-09         \\
+                    &   (0.00103)         &   (0.00483)         &(0.000000119)         &(0.000000202)         &  (5.46e-08)         &(0.000000134)         &  (4.04e-08)         &(0.000000116)         \\
+[1em]
+On Great Lakes      &                     &                     &                     &   0.0000225         &                     &   0.0000131         &                     & -0.00000722         \\
+                    &                     &                     &                     & (0.0000243)         &                     &(0.00000687)         &                     &(0.00000395)         \\
+[1em]
+On Ocean            &                     &                     &                     &  0.00000345         &                     &   0.0000151\sym{**} &                     &-0.000000348         \\
+                    &                     &                     &                     &(0.00000715)         &                     &(0.00000545)         &                     &(0.00000298)         \\
+[1em]
+Terrain Ruggedness  &                     &                     &                     & 0.000000602         &                     & 0.000000452         &                     &-0.000000222         \\
+                    &                     &                     &                     &(0.000000528)         &                     &(0.000000224)         &                     &(0.000000216)         \\
+[1em]
+Land Area (meters)  &                     &                     &                     &   -2.00e-16         &                     &   -6.96e-17         &                     &   -8.18e-16         \\
+                    &                     &                     &                     &  (1.47e-16)         &                     &  (4.05e-16)         &                     &  (5.12e-16)         \\
+[1em]
+Total Population    &                     &                     &                     &   -3.64e-12         &                     &    1.82e-13         &                     &   -1.30e-12         \\
+                    &                     &                     &                     &  (4.74e-12)         &                     &  (2.44e-12)         &                     &  (2.07e-12)         \\
+[1em]
+Constant            &       0.498\sym{***}&      -0.344\sym{*}  &                     &                     &                     &                     &                     &                     \\
+                    &    (0.0515)         &     (0.141)         &                     &                     &                     &                     &                     &                     \\
+\hline
+\# Munis            &                     &                     &                     &                     &                     &                     &                     &                     \\
+Stream Length (meters)&                     &   0.0000450\sym{***}&                     &                     &                     &                     &                     &                     \\
+                    &                     &(0.00000419)         &                     &                     &                     &                     &                     &                     \\
+[1em]
+Constant            &                     &      -1.499         &                     &                     &                     &                     &                     &                     \\
+                    &                     &     (4.741)         &                     &                     &                     &                     &                     &                     \\
+\hline
+/                   &                     &                     &                     &                     &                     &                     &                     &                     \\
+athrho2\_1           &                     &      -0.827\sym{***}&                     &                     &                     &                     &                     &                     \\
+                    &                     &     (0.208)         &                     &                     &                     &                     &                     &                     \\
+[1em]
+lnsigma2            &                     &       3.749\sym{***}&                     &                     &                     &                     &                     &                     \\
+                    &                     &    (0.0505)         &                     &                     &                     &                     &                     &                     \\
+\hline
+State FE            &          No         &          No         &         Yes         &         Yes         &         Yes         &         Yes         &         Yes         &         Yes         \\
+R-squared           &                     &                     &      0.0741         &       0.132         &      0.0351         &      0.0855         &     0.00329         &       0.164         \\
+Observations        &         196         &         196         &         123         &         123         &         143         &         143         &         125         &         125         \\
+\hline\hline
+\multicolumn{9}{l}{\footnotesize Standard errors in parentheses}\\
+\multicolumn{9}{l}{\footnotesize \sym{*} \(p<0.05\), \sym{**} \(p<0.01\), \sym{***} \(p<0.001\)}\\
+\end{tabular}
+}

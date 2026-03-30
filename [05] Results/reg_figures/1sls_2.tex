@@ -1,0 +1,37 @@
+{
+\def\sym#1{\ifmmode^{#1}\else\(^{#1}\)\fi}
+\begin{tabular}{l*{6}{c}}
+\toprule
+                    &\multicolumn{1}{c}{(1)}&\multicolumn{1}{c}{(2)}&\multicolumn{1}{c}{(3)}&\multicolumn{1}{c}{(4)}&\multicolumn{1}{c}{(5)}&\multicolumn{1}{c}{(6)}\\
+                    &\multicolumn{1}{c}{\# Munis}&\multicolumn{1}{c}{\# Counties}&\multicolumn{1}{c}{Population HHI}&\multicolumn{1}{c}{\% in Central City}&\multicolumn{1}{c}{SDI (Rectangle)}&\multicolumn{1}{c}{SDI (Circle)}\\
+\midrule
+Stream Length (meters)&   0.0000277\sym{***}&  0.00000311\sym{***}&   -7.64e-08\sym{***}&   -2.93e-08         &    2.39e-09         &    6.09e-10         \\
+                    &(0.00000655)         &(0.000000744)         &  (2.36e-08)         &  (2.31e-08)         &  (7.86e-09)         &  (6.47e-09)         \\
+\addlinespace
+On Great Lakes      &      -3.952         &      -1.097         &    -0.00778         &      0.0185         &     -0.0375         &    -0.00109         \\
+                    &     (11.35)         &     (1.031)         &    (0.0707)         &    (0.0394)         &    (0.0270)         &    (0.0265)         \\
+\addlinespace
+On Ocean            &      -1.576         &       0.199         &     -0.0250         &     -0.0573\sym{*}  &    -0.00692         &    0.000127         \\
+                    &     (4.674)         &     (0.496)         &    (0.0365)         &    (0.0335)         &    (0.0133)         &    (0.0135)         \\
+\addlinespace
+Terrain Ruggedness  &      0.0354         &     -0.0481\sym{**} &     0.00199         &     0.00167         &    0.000521         &    0.000848         \\
+                    &     (0.205)         &    (0.0199)         &   (0.00205)         &   (0.00197)         &  (0.000814)         &  (0.000940)         \\
+\addlinespace
+Land Area (meters)  &   -3.20e-10         &    1.66e-11         &   -7.44e-13         &   -3.11e-12         &   -5.08e-13         &   -3.34e-13         \\
+                    &  (2.35e-10)         &  (2.91e-11)         &  (2.55e-12)         &  (2.28e-12)         &  (5.36e-13)         &  (4.84e-13)         \\
+\addlinespace
+Total Population    &   0.0000203\sym{***}& 0.000000563\sym{***}&   -1.52e-08         &   -6.63e-09         &   -4.26e-09         &   -1.55e-09         \\
+                    &(0.00000407)         &(0.000000190)         &  (1.34e-08)         &  (1.51e-08)         &  (3.42e-09)         &  (2.31e-09)         \\
+\addlinespace
+Constant            &      -1.146         &       1.100\sym{*}  &       0.412\sym{***}&       0.488\sym{***}&       0.490\sym{***}&       0.609\sym{***}\\
+                    &     (6.716)         &     (0.627)         &    (0.0354)         &    (0.0341)         &    (0.0123)         &    (0.0133)         \\
+\midrule
+State FE            &         Yes         &         Yes         &         Yes         &         Yes         &         Yes         &         Yes         \\
+Controls            &         Yes         &         Yes         &         Yes         &         Yes         &         Yes         &         Yes         \\
+Observations        &         199         &         199         &         199         &         199         &         195         &         195         \\
+R-squared           &       0.827         &       0.755         &       0.456         &       0.589         &       0.487         &       0.493         \\
+\bottomrule
+\multicolumn{7}{l}{\footnotesize Standard errors in parentheses}\\
+\multicolumn{7}{l}{\footnotesize \sym{*} \(p<0.10\), \sym{**} \(p<0.05\), \sym{***} \(p<0.01\)}\\
+\end{tabular}
+}

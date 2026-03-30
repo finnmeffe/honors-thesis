@@ -1,0 +1,51 @@
+{
+\def\sym#1{\ifmmode^{#1}\else\(^{#1}\)\fi}
+\begin{tabular}{l*{6}{c}}
+\toprule
+                    &\multicolumn{6}{c}{Dependent Variable: \(\Gamma\) Dummy at Radius 1000m}                                                           \\
+                    &\multicolumn{1}{c}{(1)}         &\multicolumn{1}{c}{(2)}         &\multicolumn{1}{c}{(3)}         &\multicolumn{1}{c}{(4)}         &\multicolumn{1}{c}{(5)}         &\multicolumn{1}{c}{(6)}         \\
+\midrule
+\# Munis            &    0.000631         &                     &                     &                     &                     &                     \\
+                    &  (0.000577)         &                     &                     &                     &                     &                     \\
+\addlinespace
+\# Counties         &                     &      0.0288\sym{***}&                     &                     &                     &                     \\
+                    &                     &   (0.00929)         &                     &                     &                     &                     \\
+\addlinespace
+Population HHI      &                     &                     &      -0.138         &                     &                     &                     \\
+                    &                     &                     &     (0.242)         &                     &                     &                     \\
+\addlinespace
+\% in Central City  &                     &                     &                     &      0.0748         &                     &                     \\
+                    &                     &                     &                     &     (0.202)         &                     &                     \\
+\addlinespace
+SDI (Rectangle)     &                     &                     &                     &                     &       0.220         &                     \\
+                    &                     &                     &                     &                     &     (0.425)         &                     \\
+\addlinespace
+SDI (Circle)        &                     &                     &                     &                     &                     &       0.199         \\
+                    &                     &                     &                     &                     &                     &     (0.659)         \\
+\addlinespace
+Land Area (meters)  &    4.40e-12         &   -8.01e-13         &    4.53e-12         &    5.50e-12         &    5.48e-12         &    5.46e-12         \\
+                    &  (7.40e-12)         &  (6.04e-12)         &  (7.42e-12)         &  (7.39e-12)         &  (7.61e-12)         &  (7.62e-12)         \\
+\addlinespace
+Total Population    &   -1.77e-08         &    1.93e-08         &   -1.49e-08         &   -7.41e-09         &    8.40e-10         &   -1.82e-09         \\
+                    &  (3.46e-08)         &  (4.24e-08)         &  (3.44e-08)         &  (3.57e-08)         &  (3.45e-08)         &  (3.52e-08)         \\
+\addlinespace
+\% Bachelor's or Higher&       2.389\sym{***}&       2.260\sym{***}&       2.474\sym{***}&       2.408\sym{***}&       2.510\sym{***}&       2.517\sym{***}\\
+                    &     (0.580)         &     (0.555)         &     (0.577)         &     (0.587)         &     (0.595)         &     (0.605)         \\
+\addlinespace
+\# Universities     &     0.00132         &    0.000434         &     0.00256         &     0.00145         &     0.00115         &     0.00136         \\
+                    &   (0.00332)         &   (0.00344)         &   (0.00350)         &   (0.00367)         &   (0.00329)         &   (0.00321)         \\
+\addlinespace
+\# Tech Firms       & -0.00000475         &  -0.0000394         &  -0.0000140         & -0.00000202         & -0.00000768         & -0.00000836         \\
+                    & (0.0000397)         & (0.0000450)         & (0.0000433)         & (0.0000440)         & (0.0000400)         & (0.0000408)         \\
+\addlinespace
+Constant            &      -0.124         &      -0.125         &     -0.0951         &      -0.160         &      -0.273         &      -0.290         \\
+                    &     (0.169)         &     (0.162)         &     (0.185)         &     (0.189)         &     (0.261)         &     (0.460)         \\
+\midrule
+State FE            &         Yes         &         Yes         &         Yes         &         Yes         &         Yes         &         Yes         \\
+Observations        &         183         &         183         &         183         &         183         &         180         &         180         \\
+R-squared           &       0.373         &       0.391         &       0.374         &       0.373         &       0.378         &       0.377         \\
+\bottomrule
+\multicolumn{7}{l}{\footnotesize Standard errors in parentheses}\\
+\multicolumn{7}{l}{\footnotesize \sym{*} \(p<0.10\), \sym{**} \(p<0.05\), \sym{***} \(p<0.01\)}\\
+\end{tabular}
+}
