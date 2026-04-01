@@ -75,7 +75,8 @@ label variable streams_per_area "Streams / Area"
 label variable greatlake "On Great Lakes"
 label variable ocean "On Ocean"
 label variable sd_areatri "Terrain Ruggedness"
-label variable gamma "\(\Gamma\)"
+label variable gamma "\(\Gamma_T\)"
+label variable gamma_c "\(\Gamma_C\)"
 label variable share_in_central_city "\% in Central City"
 label variable share_bach_or_higher "\% Bachelor's or Higher"
 label variable num_unis "\# Universities"
@@ -211,7 +212,9 @@ esttab m* using "$results_dir/reg_figures/ols_`lev'.tex", ///
 	replace
 }
 
-// 2SLS
+////////////////////////////////////
+// 2SLS (radius own tables)
+////////////////////////////////////
 
 local r_levels 250 500 1000
 eststo clear
@@ -219,23 +222,40 @@ eststo clear
 foreach lev of local r_levels {
 eststo clear
 
-eststo m_lpm1: quietly ivregress 2sls gam_dummy (num_munis = stream_length_meters) if r == `lev'
+eststo m_lpm1: quietly ivregress 2sls gam_dummy (num_munis = stream_length_meters) if r == `lev', vce(robust)
 estadd local statefe "No"
 
-eststo m_pro1: quietly ivprobit gam_dummy (num_munis = stream_length_meters) if r == `lev'
+eststo m_pro1: quietly ivprobit gam_dummy (num_munis = stream_length_meters) if r == `lev',
 estadd local statefe "No"
 estadd scalar rho = tanh(_b[/athrho2_1])
 estadd scalar sig = exp(_b[/lnsigma2])
 
-esttab m*, se r2
+eststo m_lpm2: quietly ivregress 2sls gam_dummy (num_munis = stream_length_meters) greatlake ocean sd_areatri aland pop_muni if r == `lev', vce(robust)
+estadd local statefe "No"
 
-esttab m* using "$results_dir/reg_figures/2sls_`lev'_1.tex", ///
-	keep(num_munis) ///
+eststo m_pro2: quietly ivprobit gam_dummy (num_munis = stream_length_meters) greatlake ocean sd_areatri aland pop_muni if r == `lev'
+estadd local statefe "No"
+estadd scalar rho = tanh(_b[/athrho2_1])
+estadd scalar sig = exp(_b[/lnsigma2])
+
+eststo m_lpm3: quietly ivreghdfe gam_dummy (num_munis = stream_length_meters) greatlake ocean sd_areatri aland pop_muni share_bach_or_higher num_unis tech if r == `lev', absorb(state_id) vce(cluster state_id)
+estadd local statefe "Yes"
+
+eststo m_pro3: quietly ivprobit gam_dummy (num_munis = stream_length_meters) greatlake ocean sd_areatri aland pop_muni share_bach_or_higher num_unis tech i.state_id if r == `lev', /// 
+vce(cluster state_id)
+estadd local statefe "Yes"
+estadd scalar rho = tanh(_b[/athrho2_1])
+estadd scalar sig = exp(_b[/lnsigma2])
+
+esttab m*, se r2 keep(main:) drop(*.state_id _cons)
+
+esttab m* using "$results_dir/reg_figures/2sls_`lev'_full.tex", ///
+	keep(main:) drop(*.state_id _cons) ///
     se ///
 	r2 ///
 	label ///
-	mgroups("LPM" "Probit", ///
-        pattern(1 1) ///
+	mgroups("LPM" "Probit" "LPM" "Probit" "LPM" "Probit", ///
+        pattern(1 1 1 1 1 1) ///
         span ///
         prefix(\multicolumn{@span}{c}{) ///
         suffix(})) ///
@@ -244,57 +264,119 @@ esttab m* using "$results_dir/reg_figures/2sls_`lev'_1.tex", ///
     nomtitles ///
 	booktabs ///
 	replace 
+	
+ereturn list
 }
 
+////////////////////////////////////
+// 2SLS (combined table)
+////////////////////////////////////
+
+local r_levels 250 500 1000
+eststo clear
+
+foreach lev of local r_levels {
+
+eststo m_lpm_`lev': quietly ivreghdfe gam_dummy (num_munis = stream_length_meters) greatlake ocean sd_areatri aland pop_muni share_bach_or_higher num_unis tech if r == `lev', absorb(state_id) vce(cluster state_id)
+estadd local statefe "Yes"
+estadd local ivcontrols "Yes"
+
+eststo m_pro_`lev': quietly ivprobit gam_dummy (num_munis = stream_length_meters) greatlake ocean sd_areatri aland pop_muni share_bach_or_higher num_unis tech i.state_id if r == `lev', /// 
+vce(cluster state_id)
+estadd local statefe "Yes"
+estadd local ivcontrols "Yes"
+estadd scalar rho = tanh(_b[/athrho2_1])
+estadd scalar sig = exp(_b[/lnsigma2])
+	
+}
+
+esttab m_*, se r2 drop(*.state_id _cons greatlake ocean sd_areatri aland pop_muni)
+
+esttab m* using "$results_dir/reg_figures/2sls_full.tex", ///
+	keep(main:) drop(*.state_id _cons greatlake ocean sd_areatri aland pop_muni) ///
+    se ///
+	r2 ///
+	label ///
+	mgroups("r = 250" "r = 500" "r = 1000", ///
+        pattern(1 0 1 0 1 0) ///
+        span ///
+        prefix(\multicolumn{@span}{c}{) ///
+        suffix(})) ///
+    stats(rho sig statefe ivcontrols N, ///
+		labels("\(\rho\)" "\(\sigma\)" "State FE" "IV Controls" "Observations")) ///
+    nomtitles ///
+	booktabs ///
+	replace 
+
+////////////////////////////////////
+// 2SLS (continuous gamma)
+////////////////////////////////////	
+
+eststo clear
 
 foreach lev of local r_levels {	
 	eststo m1_`lev': quietly ivreghdfe gamma (num_munis = stream_length_meters) if r == `lev' & gamma != 0, ///
 	absorb(state_id) vce(cluster state_id)
 	estadd local statefe "Yes"
+	estadd local ivcontrols "No"
 	
-	eststo m2_`lev': quietly ivreghdfe gamma greatlake ocean sd_areatri aland pop_muni (num_munis = stream_length_meters) if r == `lev' & gamma != 0, absorb(state_id) vce(cluster state_id)
+	eststo m2_`lev': quietly ivreghdfe gamma greatlake ocean sd_areatri aland pop_muni (num_munis = stream_length_meters) share_bach_or_higher num_unis tech if r == `lev' & gamma != 0, absorb(state_id) vce(cluster state_id)
 	estadd local statefe "Yes"
+	estadd local ivcontrols "Yes"
 }
 
 esttab m*, se r2
 
-esttab m* using "$results_dir/reg_figures/main_spec.tex", ///
+esttab m1_* m2_* using "$results_dir/reg_figures/2sls_cont_gam.tex", ///
+	drop(greatlake ocean sd_areatri aland pop_muni) ///
 	label se r2 ///
-	mtitles ("" "" "" "" "" "") ///
-	mgroups("r = 250" "r = 500" "r = 1000", ///
-    pattern(1 0 1 0 1 0)) ///
-	stats(statefe r2 N, labels("State FE" "R-squared" "Observations")) ///
+	mgroups("r = 250" "r = 500" "r = 1000" "r = 250" "r = 500" "r = 1000", ///
+        pattern(1 1 1 1 1 1) ///
+        span ///
+        prefix(\multicolumn{@span}{c}{) ///
+        suffix(}) ) ///
+	stats(statefe ivcontrols r2 N, labels("State FE" "IV Controls" "R-squared" "Observations")) ///
+	nomtitles ///
+	booktabs ///
 	replace
 	
-// Add negative gammas
-
-eststo clear
-
-foreach lev of local r_levels {	
-	eststo m1_`lev': quietly ivreghdfe gamma2 (num_munis = stream_length_meters) if r == `lev', ///
-	absorb(state_id) vce(cluster state_id)
-	estadd local statefe "Yes"
 	
-	eststo m2_`lev': quietly ivreghdfe gamma2 greatlake ocean sd_areatri aland pop_muni (num_munis = stream_length_meters) if r == `lev', absorb(state_id) vce(cluster state_id)
-	estadd local statefe "Yes"
-}
+////////////////////////////////////
+// 2SLS (tech and creative comparison)
+////////////////////////////////////
 
-esttab m*, se r2
-
-
-// Logit Regression
-
-*twoway scatter gam_dummy num_munis
 eststo clear
+
+// for LPM
 
 foreach lev of local r_levels {
-eststo probit_`lev': quietly ivprobit gam_dummy (num_munis = stream_length_meters) greatlake ocean sd_areatri aland pop_muni i.state_id if r == `lev', /// 
-vce(cluster state_id)
-estadd local statefe "Yes"
 
-eststo lpm_`lev': quietly ivreghdfe gam_dummy greatlake ocean sd_areatri aland pop_muni (num_munis = stream_length_meters) if r == `lev', absorb(state_id) vce(cluster state_id)
+eststo m_lpm_`lev': quietly ivreghdfe gam_dummy (num_munis = stream_length_meters) greatlake ocean sd_areatri aland pop_muni share_bach_or_higher num_unis tech if r == `lev', absorb(state_id) vce(cluster state_id)
 estadd local statefe "Yes"
+estadd local ivcontrols "Yes"
+
+eststo m_lpm_`lev'_c: quietly ivreghdfe gam_dummy_c (num_munis = stream_length_meters) greatlake ocean sd_areatri aland pop_muni share_bach_or_higher num_unis creative if r == `lev', absorb(state_id) vce(cluster state_id)
+estadd local statefe "Yes"
+estadd local ivcontrols "Yes"
+	
 }
 
-esttab probit_* lpm_*, se r2 drop(*.state_id)
+esttab, se r2
+
+esttab m_* using "$results_dir/reg_figures/2sls_tech_creative.tex", ///
+	drop(greatlake ocean sd_areatri aland pop_muni) ///
+	label se r2 ///
+	mgroups("r = 250" "r = 500" "r = 1000", ///
+        pattern(1 0 1 0 1 0) ///
+        span ///
+        prefix(\multicolumn{@span}{c}{) ///
+        suffix(}) ) ///
+	mtitles("\(\Gamma_T\)" "\(\Gamma_C\)" "\(\Gamma_T\)" "\(\Gamma_C\)" "\(\Gamma_T\)" "\(\Gamma_C\)") ///
+    nodepvars ///
+	stats(statefe ivcontrols r2 N, labels("State FE" "IV Controls" "R-squared" "Observations")) ///
+	booktabs ///
+	replace
+ 	
+
+
 
