@@ -1,0 +1,28 @@
+{
+\def\sym#1{\ifmmode^{#1}\else\(^{#1}\)\fi}
+\begin{tabular}{l*{6}{c}}
+\toprule
+                    &\multicolumn{1}{c}{r = 250}&\multicolumn{1}{c}{r = 500}&\multicolumn{1}{c}{r = 1000}&\multicolumn{1}{c}{r = 250}&\multicolumn{1}{c}{r = 500}&\multicolumn{1}{c}{r = 1000}\\
+                    &\multicolumn{1}{c}{(1)}         &\multicolumn{1}{c}{(2)}         &\multicolumn{1}{c}{(3)}         &\multicolumn{1}{c}{(4)}         &\multicolumn{1}{c}{(5)}         &\multicolumn{1}{c}{(6)}         \\
+\midrule
+\# Munis            &   -5.62e-08         &-0.000000140\sym{*}  &-0.000000131\sym{**} & 0.000000119         &-0.000000113         &    2.00e-08         \\
+                    &(0.000000119)         &  (5.46e-08)         &  (4.04e-08)         &(0.000000237)         &(0.000000161)         &(0.000000122)         \\
+\addlinespace
+\% Bachelor's or Higher&                     &                     &                     &  -0.0000628         &  -0.0000166         &  -0.0000236         \\
+                    &                     &                     &                     & (0.0000466)         & (0.0000365)         & (0.0000277)         \\
+\addlinespace
+\# Universities     &                     &                     &                     &    3.79e-09         & 0.000000155         &   -7.80e-08         \\
+                    &                     &                     &                     &(0.000000209)         &(0.000000330)         &(0.000000149)         \\
+\addlinespace
+\# Tech Firms       &                     &                     &                     &    8.16e-11         &   -2.43e-09         &   -4.64e-11         \\
+                    &                     &                     &                     &  (2.02e-09)         &  (1.93e-09)         &  (1.62e-09)         \\
+\midrule
+State FE            &         Yes         &         Yes         &         Yes         &         Yes         &         Yes         &         Yes         \\
+IV Controls         &          No         &          No         &          No         &         Yes         &         Yes         &         Yes         \\
+R-squared           &      0.0741         &      0.0351         &     0.00329         &       0.114         &      0.0995         &       0.181         \\
+Observations        &         123         &         143         &         125         &         123         &         143         &         125         \\
+\bottomrule
+\multicolumn{7}{l}{\footnotesize Standard errors in parentheses}\\
+\multicolumn{7}{l}{\footnotesize \sym{*} \(p<0.05\), \sym{**} \(p<0.01\), \sym{***} \(p<0.001\)}\\
+\end{tabular}
+}

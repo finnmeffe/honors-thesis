@@ -1,0 +1,32 @@
+{
+\def\sym#1{\ifmmode^{#1}\else\(^{#1}\)\fi}
+\begin{tabular}{l*{6}{c}}
+\toprule
+                    &\multicolumn{2}{c}{r = 250}                &\multicolumn{2}{c}{r = 500}                &\multicolumn{2}{c}{r = 1000}               \\
+                    &\multicolumn{1}{c}{(1)}&\multicolumn{1}{c}{(2)}&\multicolumn{1}{c}{(3)}&\multicolumn{1}{c}{(4)}&\multicolumn{1}{c}{(5)}&\multicolumn{1}{c}{(6)}\\
+                    &\multicolumn{1}{c}{\(\Gamma\_T\)}&\multicolumn{1}{c}{\(\Gamma\_C\)}&\multicolumn{1}{c}{\(\Gamma\_T\)}&\multicolumn{1}{c}{\(\Gamma\_C\)}&\multicolumn{1}{c}{\(\Gamma\_T\)}&\multicolumn{1}{c}{\(\Gamma\_C\)}\\
+\midrule
+\# Munis            &     0.00436\sym{**} &     0.00187         &     0.00398\sym{*}  &     0.00412         &     0.00492\sym{*}  &     0.00876\sym{***}\\
+                    &   (0.00143)         &   (0.00187)         &   (0.00177)         &   (0.00243)         &   (0.00193)         &   (0.00242)         \\
+\addlinespace
+\% Bachelor's or Higher&       2.409\sym{***}&       2.504\sym{***}&       1.852\sym{***}&       2.174\sym{***}&       2.060\sym{***}&       1.701\sym{**} \\
+                    &     (0.565)         &     (0.524)         &     (0.504)         &     (0.470)         &     (0.541)         &     (0.478)         \\
+\addlinespace
+\# Universities     &    -0.00663\sym{*}  &    -0.00251         &    -0.00405         &    -0.00309         &    -0.00205         &    -0.00556         \\
+                    &   (0.00298)         &   (0.00212)         &   (0.00301)         &   (0.00273)         &   (0.00454)         &   (0.00410)         \\
+\addlinespace
+\# Tech Firms       &  -0.0000468         &                     & -0.00000309         &                     &  0.00000700         &                     \\
+                    & (0.0000412)         &                     & (0.0000384)         &                     & (0.0000445)         &                     \\
+\addlinespace
+\# Creative Firms   &                     &   0.0000258         &                     &   0.0000698\sym{*}  &                     &    0.000116\sym{**} \\
+                    &                     & (0.0000270)         &                     & (0.0000328)         &                     & (0.0000330)         \\
+\midrule
+State FE            &         Yes         &         Yes         &         Yes         &         Yes         &         Yes         &         Yes         \\
+IV Controls         &         Yes         &         Yes         &         Yes         &         Yes         &         Yes         &         Yes         \\
+R-squared           &       0.235         &       0.270         &       0.109         &       0.150         &       0.152         &      0.0365         \\
+Observations        &         183         &         195         &         183         &         195         &         183         &         195         \\
+\bottomrule
+\multicolumn{7}{l}{\footnotesize Standard errors in parentheses}\\
+\multicolumn{7}{l}{\footnotesize \sym{*} \(p<0.05\), \sym{**} \(p<0.01\), \sym{***} \(p<0.001\)}\\
+\end{tabular}
+}

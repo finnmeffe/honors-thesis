@@ -1,0 +1,44 @@
+{
+\def\sym#1{\ifmmode^{#1}\else\(^{#1}\)\fi}
+\begin{tabular}{l*{6}{c}}
+\toprule
+                    &\multicolumn{1}{c}{LPM}&\multicolumn{1}{c}{Probit}&\multicolumn{1}{c}{LPM}&\multicolumn{1}{c}{Probit}&\multicolumn{1}{c}{LPM}&\multicolumn{1}{c}{Probit}\\
+                    &\multicolumn{1}{c}{(1)}         &\multicolumn{1}{c}{(2)}         &\multicolumn{1}{c}{(3)}         &\multicolumn{1}{c}{(4)}         &\multicolumn{1}{c}{(5)}         &\multicolumn{1}{c}{(6)}         \\
+\midrule
+main                &                     &                     &                     &                     &                     &                     \\
+\# Munis            &     0.00427\sym{***}&      0.0218\sym{***}&     0.00489\sym{***}&      0.0189\sym{*}  &     0.00436\sym{**} &      0.0173         \\
+                    &  (0.000957)         &   (0.00509)         &   (0.00134)         &   (0.00751)         &   (0.00143)         &    (0.0173)         \\
+\addlinespace
+On Great Lakes      &                     &                     &     0.00583         &      0.0854         &      0.0860         &      0.0425         \\
+                    &                     &                     &     (0.118)         &     (0.375)         &    (0.0902)         &     (0.434)         \\
+\addlinespace
+On Ocean            &                     &                     &       0.114         &       0.354         &      0.0496         &     -0.0406         \\
+                    &                     &                     &    (0.0722)         &     (0.255)         &     (0.159)         &     (0.653)         \\
+\addlinespace
+Terrain Ruggedness  &                     &                     &     0.00688\sym{*}  &      0.0214\sym{*}  &     0.00264         &     0.00626         \\
+                    &                     &                     &   (0.00311)         &   (0.00930)         &   (0.00484)         &    (0.0150)         \\
+\addlinespace
+Land Area (meters)  &                     &                     &    8.84e-12\sym{*}  &   -5.53e-12         &    7.29e-12\sym{*}  &   -4.79e-12         \\
+                    &                     &                     &  (3.97e-12)         &  (2.44e-11)         &  (3.40e-12)         &  (5.01e-11)         \\
+\addlinespace
+Total Population    &                     &                     &   -7.49e-08         &  0.00000102         &    4.31e-08         & 0.000000398         \\
+                    &                     &                     &  (3.98e-08)         &(0.000000529)         &  (4.67e-08)         &(0.00000118)         \\
+\addlinespace
+\% Bachelor's or Higher&                     &                     &                     &                     &       2.409\sym{***}&       6.096\sym{*}  \\
+                    &                     &                     &                     &                     &     (0.565)         &     (2.795)         \\
+\addlinespace
+\# Universities     &                     &                     &                     &                     &    -0.00663\sym{*}  &     -0.0162         \\
+                    &                     &                     &                     &                     &   (0.00298)         &    (0.0497)         \\
+\addlinespace
+\# Tech Firms       &                     &                     &                     &                     &  -0.0000468         &     0.00253         \\
+                    &                     &                     &                     &                     & (0.0000412)         &   (0.00144)         \\
+\midrule
+\(\rho\)            &                     &      -0.474         &                     &      -0.539         &                     &      -0.374         \\
+\(\sigma\)          &                     &       42.48         &                     &       28.16         &                     &       20.57         \\
+State FE            &          No         &          No         &          No         &          No         &         Yes         &         Yes         \\
+Observations        &         196         &         196         &         196         &         196         &         183         &         155         \\
+\bottomrule
+\multicolumn{7}{l}{\footnotesize Standard errors in parentheses}\\
+\multicolumn{7}{l}{\footnotesize \sym{*} \(p<0.05\), \sym{**} \(p<0.01\), \sym{***} \(p<0.001\)}\\
+\end{tabular}
+}
