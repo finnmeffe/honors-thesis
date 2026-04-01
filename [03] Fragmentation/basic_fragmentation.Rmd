@@ -9,7 +9,7 @@ options(scipen = 999)
 if(!require('pacman')) {
   install.packages('pacman')
 }
-pacman::p_load(ggplot2, dplyr, tidyverse, data.table, lubridate, ggpubr, skimr, scales, plotly, tidycensus, readxl, httr, jsonlite, sf, mapview, tigris, lehdr, stargazer)
+pacman::p_load(ggplot2, dplyr, tidyverse, data.table, lubridate, ggpubr, skimr, scales, plotly, tidycensus, readxl, httr, jsonlite, sf, mapview, tigris, lehdr, stargazer, reawdr)
 ```
 
 Read in Census of Governments data and the CBSA-County crosswalk.
@@ -17,7 +17,7 @@ Read in Census of Governments data and the CBSA-County crosswalk.
 ```{r}
 cog_2022 <- read_excel("data/Govt_Units_2022_Final.xlsx")
 
-cog_2022_muni <- cog_2022 %>% 
+cog_2022 <- cog_2022 %>% 
   select(UNIT_NAME, UNIT_TYPE, POPULATION, FIPS_STATE, FIPS_COUNTY, FIPS_PLACE) %>% 
   filter(UNIT_TYPE %in% c("2 - MUNICIPAL","3 - TOWNSHIP")) %>% 
   rename_with(tolower) %>% 
@@ -28,7 +28,7 @@ xwalk.cbsa_fips <- read_csv("https://data.nber.org/cbsa-csa-fips-county-crosswal
          cbsa_type = metropolitanmicropolitanstatis) %>% 
   select(cbsacode,cbsatitle,fullfips,cbsa_type)
 
-cog_2022_muni <- cog_2022_muni %>% 
+cog_2022 <- cog_2022 %>% 
   inner_join(xwalk.cbsa_fips, by = join_by(fips == fullfips))
 ```
 
@@ -44,7 +44,7 @@ hhi <- function(col) {
 
 # separate out these for townships vs municipalities
 
-cog_2022_sum <- cog_2022_muni %>% 
+cog_2022_sum <- cog_2022 %>% 
   group_by(cbsacode) %>% 
   arrange(-population) %>% 
   summarise(num_counties = n_unique(fips_county),
@@ -60,7 +60,7 @@ cog_2022_sum <- cog_2022_muni %>%
             cbsa_type = cbsa_type[1]
   )
 
-write.csv(cog_2022_sum, file = "data/fragmentation_basic.csv", row.names=FALSE)
+# write.csv(cog_2022_sum, file = "data/fragmentation_basic.csv", row.names=FALSE)
 
 stargazer(as.data.frame(cog_2022_sum) %>% 
             select(-cbsacode),
@@ -72,4 +72,94 @@ stargazer(as.data.frame(cog_2022_sum) %>%
           covariate.labels = c("Num. Counties","Num. Municipalities","Num. all Local Govs.","Municipal Pop.","Total Pop.","HHI - Municipal Pop.","HHI - Total Pop.","Muns. per Person","Share in Central City"),
           out = "figures/fragmentation_summary_stats.tex")
 ```
+
+## Historical Data
+
+Given varying file formats, I read in each COG file separatley to ensure data quality. Need name, unit type, population, and each fips code from each of the dfs.
+
+```{r}
+folder <- "C:\\Users\\phynm\\OneDrive\\Documents\\thesis_data\\Census of Governments"
+
+cog_2017 <- read_excel(file.path(folder, "Govt_Units_2017_Final.xlsx")) %>% 
+  select(NAME, UNIT_TYPE, POPULATION, FIPS_STATE, FIPS_COUNTY, FIPS_PLACE) %>% 
+  filter(UNIT_TYPE %in% c("2 - MUNICIPAL","3 - TOWNSHIP")) %>% 
+  rename_with(tolower) %>% 
+  mutate(fips = paste0(fips_state,fips_county))
+
+cog_2012 <- read_excel(file.path(folder, "Govt_Units_2012_Final.xlsx")) %>% 
+  select(NAME, CENSUS_ID, POPULATION, FIPS_STATE, FIPS_COUNTY, FIPS_PLACE) %>% 
+  mutate(
+    gov_type = substr(CENSUS_ID, 3, 3),
+    UNIT_TYPE = case_when(
+      gov_type == "1" ~ "1 - COUNTY",
+      gov_type == "2" ~ "2 - MUNICIPAL",
+      gov_type == "3" ~ "3 - TOWNSHIP",
+      TRUE ~ "Other"
+    )
+  ) %>% 
+  select(-CENSUS_ID, gov_type) %>% 
+  filter(UNIT_TYPE %in% c("2 - MUNICIPAL","3 - TOWNSHIP")) %>% 
+  rename_with(tolower) %>% 
+  mutate(fips = paste0(fips_state,fips_county))
+
+cog_2007_muni <- read_fwf(
+  file.path(folder, "2007gid_cities.txt"),
+  fwf_cols(
+    type         = c(3, 3),
+    gov_name     = c(15, 78),
+    pop_2006     = c(387, 396),
+    fips_state   = c(397, 398),
+    fips_county  = c(399, 401),
+    fips_place   = c(402, 406)
+  )
+) %>% 
+  rename(unit_type = type, name = gov_name, population = pop_2006)
+
+cog_2007_town <- read_fwf(
+  file.path(folder, "2007gid_towns.txt"),
+  fwf_cols(
+    type         = c(3, 3),
+    gov_name     = c(15, 78),
+    pop_2006     = c(387, 396),
+    fips_state   = c(397, 398),
+    fips_county  = c(399, 401),
+    fips_place   = c(402, 406)
+  )
+) %>% 
+  rename(unit_type = type, name = gov_name, population = pop_2006)
+
+cog_2007 <- rbind(cog_2007_muni, cog_2007_town)
+rm(cog_2007_muni, cog_2007_town)
+
+cog_2002_town <- read_fwf(
+  file.path(folder, "2002GID_Towns.txt"),
+  fwf_cols(
+    type         = c(3, 3),
+    gov_name     = c(15, 78),
+    pop_2001     = c(387, 396),
+    fips_state   = c(1, 2),
+    fips_county  = c(4, 6),
+    fips_place   = c(402, 406)
+  )
+) %>% 
+  rename(unit_type = type, name = gov_name, population = pop_2001)
+
+cog_2002_muni <- read_fwf(
+  file.path(folder, "2002GID_Cities.txt"),
+  fwf_cols(
+    type         = c(3, 3),
+    gov_name     = c(15, 78),
+    pop_2001     = c(387, 396),
+    fips_state   = c(1, 2),
+    fips_county  = c(4, 6),
+    fips_place   = c(402, 406)
+  )
+) %>% 
+  rename(unit_type = type, name = gov_name, population = pop_2001)
+
+cog_2002 <- rbind(cog_2002_muni, cog_2002_town)
+rm(cog_2002_muni, cog_2002_town)
+
+```
+
 
