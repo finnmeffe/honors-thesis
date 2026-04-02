@@ -20,8 +20,10 @@ cog_2022 <- read_excel("data/Govt_Units_2022_Final.xlsx")
 cog_2022 <- cog_2022 %>% 
   select(UNIT_NAME, UNIT_TYPE, POPULATION, FIPS_STATE, FIPS_COUNTY, FIPS_PLACE) %>% 
   filter(UNIT_TYPE %in% c("2 - MUNICIPAL","3 - TOWNSHIP")) %>% 
-  rename_with(tolower) %>% 
-  mutate(fips = paste0(fips_state,fips_county))
+  rename_with(tolower) %>%
+  rename(name = unit_name) %>% 
+  mutate(fips = paste0(fips_state,fips_county),
+         year = 2022) 
 
 xwalk.cbsa_fips <- read_csv("https://data.nber.org/cbsa-csa-fips-county-crosswalk/2023/cbsa2fipsxw_2023.csv") %>% 
   mutate(fullfips = paste0(fipsstatecode, fipscountycode),
@@ -84,7 +86,8 @@ cog_2017 <- read_excel(file.path(folder, "Govt_Units_2017_Final.xlsx")) %>%
   select(NAME, UNIT_TYPE, POPULATION, FIPS_STATE, FIPS_COUNTY, FIPS_PLACE) %>% 
   filter(UNIT_TYPE %in% c("2 - MUNICIPAL","3 - TOWNSHIP")) %>% 
   rename_with(tolower) %>% 
-  mutate(fips = paste0(fips_state,fips_county))
+  mutate(fips = paste0(fips_state,fips_county),
+         year = 2017) 
 
 cog_2012 <- read_excel(file.path(folder, "Govt_Units_2012_Final.xlsx")) %>% 
   select(NAME, CENSUS_ID, POPULATION, FIPS_STATE, FIPS_COUNTY, FIPS_PLACE) %>% 
@@ -97,10 +100,11 @@ cog_2012 <- read_excel(file.path(folder, "Govt_Units_2012_Final.xlsx")) %>%
       TRUE ~ "Other"
     )
   ) %>% 
-  select(-CENSUS_ID, gov_type) %>% 
+  select(-CENSUS_ID, -gov_type) %>% 
   filter(UNIT_TYPE %in% c("2 - MUNICIPAL","3 - TOWNSHIP")) %>% 
   rename_with(tolower) %>% 
-  mutate(fips = paste0(fips_state,fips_county))
+  mutate(fips = paste0(fips_state,fips_county),
+         year = 2012)
 
 cog_2007_muni <- read_fwf(
   file.path(folder, "2007gid_cities.txt"),
@@ -128,7 +132,15 @@ cog_2007_town <- read_fwf(
 ) %>% 
   rename(unit_type = type, name = gov_name, population = pop_2006)
 
-cog_2007 <- rbind(cog_2007_muni, cog_2007_town)
+cog_2007 <- rbind(cog_2007_muni, cog_2007_town) %>% 
+  mutate(fips = paste0(fips_state,fips_county),
+         year = 2007,
+         unit_type = case_when(
+      unit_type == "1" ~ "1 - COUNTY",
+      unit_type == "2" ~ "2 - MUNICIPAL",
+      unit_type == "3" ~ "3 - TOWNSHIP",
+      TRUE ~ "Other"
+    ))
 rm(cog_2007_muni, cog_2007_town)
 
 cog_2002_town <- read_fwf(
@@ -160,6 +172,13 @@ cog_2002_muni <- read_fwf(
 cog_2002 <- rbind(cog_2002_muni, cog_2002_town)
 rm(cog_2002_muni, cog_2002_town)
 
+cog <- rbind(cog_2007, cog_2012, cog_2017, cog_2022) %>% 
+  filter(unit_type == "2 - MUNICIPAL") %>% 
+  left_join(xwalk.cbsa_fips, by = join_by(fips == fullfips))
+
+cog_sum <- cog %>% 
+  group_by(cbsatitle, year) %>% 
+  summarise(num_munis = n())
 ```
 
 
