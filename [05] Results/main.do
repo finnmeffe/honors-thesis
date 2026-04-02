@@ -377,6 +377,30 @@ esttab m_* using "$results_dir/reg_figures/2sls_tech_creative.tex", ///
 	booktabs ///
 	replace
  	
+////////////////////////////////////
+// Testing Space
+////////////////////////////////////
 
+* different measures of fragmentation
+
+local r_levels 250 500 1000
+eststo clear
+
+foreach lev of local r_levels {
+
+eststo m_lpm_`lev': quietly ivreghdfe gam_dummy (hhi_pop_muni = stream_length_meters) greatlake ocean sd_areatri aland pop_muni share_bach_or_higher num_unis tech if r == `lev', absorb(state_id) vce(cluster state_id)
+estadd local statefe "Yes"
+estadd local ivcontrols "Yes"
+
+eststo m_pro_`lev': quietly ivprobit gam_dummy (hhi_pop_muni = stream_length_meters) greatlake ocean sd_areatri aland pop_muni share_bach_or_higher num_unis tech i.state_id if r == `lev', /// 
+vce(cluster state_id)
+estadd local statefe "Yes"
+estadd local ivcontrols "Yes"
+estadd scalar rho = tanh(_b[/athrho2_1])
+estadd scalar sig = exp(_b[/lnsigma2])
+	
+}
+
+esttab m_*, se r2 drop(*.state_id _cons greatlake ocean sd_areatri aland pop_muni)
 
 
