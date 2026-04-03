@@ -423,10 +423,10 @@ sf.central <- sf.central %>% st_difference(
 
 df.central_index <- sf.central %>% 
   st_drop_geometry %>% 
-  mutate(diff_circ_central = 1-diff_circ,
-         diff_rect_central = 1-diff_rect,
+  mutate(index_circ_central = 1-diff_circ,
+         index_rect_central = 1-diff_rect,
          cbsacode = as.numeric(cbsacode)) %>% 
-  select(cbsacode, diff_circ_central, diff_rect_central)
+  select(cbsacode, index_circ_central, index_rect_central)
 
 # Simple average, assume that each listed city has equal weight in the metro
 
