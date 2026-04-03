@@ -221,8 +221,7 @@ save "data/muni_incorporation.dta", replace
 global frag_dir "C:\Users\phynm\OneDrive\Documents\GitHub\honors-thesis\[03] Fragmentation"
 
 import delimited "$frag_dir/data/fragmentation_full", clear
-destring index_circ, replace force
-destring index_rect, replace force
+destring index_circ index_rect index_circ_central index_rect_central, replace force
 tostring cbsacode, replace format(%05.0f)
 
 merge 1:1 cbsacode using "$working_dir/data/muni_incorporation"
@@ -232,21 +231,28 @@ format %5s cbsacode
 
 drop if yr_incorp_av_all < 1800
 
-twoway (scatter index_circ yr_incorp_av_all) (lfit index_circ yr_incorp_av_all)
+twoway (scatter index_rect yr_incorp_av_all) (lfit index_rect yr_incorp_av_all)
 
 eststo clear
-eststo m1: regress index_circ yr_incorp_main
+eststo m1: regress index_circ_central yr_incorp_main
 eststo m2: regress index_circ yr_incorp_md_all
 eststo m3: regress index_circ yr_incorp_av_5
-eststo m4: regress index_circ yr_incorp_av_all
+eststo m4: regress index_circ yr_incorp_av_all pop_total
 
 esttab m*, se r2
 
 eststo clear
-eststo m1: regress index_rect yr_incorp_main
+eststo m1: regress index_rect_central yr_incorp_main
 eststo m2: regress index_rect yr_incorp_md_all
 eststo m3: regress index_rect yr_incorp_av_5
-eststo m4: regress index_rect yr_incorp_av_all
+eststo m4: regress index_rect yr_incorp_av_all pop_total
 
 esttab m*, se r2
 
+eststo clear
+eststo m1: quietly regress num_munis yr_incorp_av_all
+eststo m2: quietly regress num_counties yr_incorp_av_all
+eststo m3: quietly regress share_in_central_city yr_incorp_av_all
+eststo m4: quietly regress index_rect yr_incorp_av_all pop_total
+
+esttab m*, se r2
