@@ -10,7 +10,7 @@ options(scipen = 10, digits = 6)
 if(!require('pacman')) {
   install.packages('pacman')
 }
-pacman::p_load(ggplot2, dplyr, tidyverse, data.table, lubridate, ggpubr, skimr, scales, plotly, tidycensus, readxl, httr, jsonlite, sf, mapview, tigris, lehdr, spatstat, crsuggest, dbmss, stargazer, data.table, stringi, future, modelsummary) 
+pacman::p_load(ggplot2, dplyr, tidyverse, data.table, lubridate, ggpubr, skimr, scales, plotly, tidycensus, readxl, httr, jsonlite, sf, mapview, tigris, lehdr, spatstat, crsuggest, dbmss, stargazer, data.table, stringi, future, modelsummary, haven) 
 options(tigris_use_cache = TRUE)
 ```
 
@@ -403,6 +403,8 @@ write_csv(r_final, "data/kd_creative.csv")
 
 ## Figures
 
+Percentages of CBSAs exhibiting clustering
+
 ```{r}
 fig <- as.data.frame(read_csv("data/kd_tech.csv")) %>% 
   filter(r != 0)
@@ -437,6 +439,22 @@ fig %>%
   summarise(n = n()) %>% 
   pull(n) / 197
 ```
+
+Results graph for gamma and fragmentation
+
+```{r}
+main <- read_dta("~/GitHub/honors-thesis/[05] Results/data/main.dta")
+
+ggplot(data = main %>% 
+         filter(r == 500,
+                gamma != 0),
+       aes(x = num_munis, y = gamma, size = pop_total)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+range(main$gamma)
+```
+
 
 
 ## Appendix 1: Data visualization
