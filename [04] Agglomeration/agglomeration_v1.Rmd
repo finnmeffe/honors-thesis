@@ -459,6 +459,11 @@ kd_lodes <- map_dfr(c("CNS05","CNS07","CNS10","CNS12"), function(rt) {
     mutate(type = rt)
 })
 
+kd_lodes <- kd_lodes %>%
+  mutate(type = factor(type,
+                       levels = c("CNS05", "CNS07", "CNS10", "CNS12"),
+                       labels = c("31-33: Manufacturing", "44-45: Retail Trade", "NAICS 52: Finance and Insurance", "54: Professional, Scientific, and Technical Services")))
+
 p.kd_lodes <- ggplot(data = kd_lodes, aes(x=r/1000,y=Kd)) +
   geom_line() + 
   facet_wrap(~type) +
