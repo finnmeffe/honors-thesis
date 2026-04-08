@@ -1,0 +1,32 @@
+{
+\def\sym#1{\ifmmode^{#1}\else\(^{#1}\)\fi}
+\begin{tabular}{l*{6}{c}}
+\toprule
+                    &\multicolumn{2}{c}{r = 250}                &\multicolumn{2}{c}{r = 500}                &\multicolumn{2}{c}{r = 1000}               \\
+                    &\multicolumn{1}{c}{(1)}         &\multicolumn{1}{c}{(2)}         &\multicolumn{1}{c}{(3)}         &\multicolumn{1}{c}{(4)}         &\multicolumn{1}{c}{(5)}         &\multicolumn{1}{c}{(6)}         \\
+\midrule
+main                &                     &                     &                     &                     &                     &                     \\
+SDI (Circle)        &      -4.632         &      -12.19\sym{***}&      -3.843         &      -8.744         &      -2.542         &      -1.965         \\
+                    &     (2.904)         &     (2.372)         &     (2.903)         &     (5.840)         &     (3.165)         &     (9.245)         \\
+\addlinespace
+\% Bachelor's or Higher&       1.523         &       1.411         &       0.860         &       2.727         &       1.589         &       4.681         \\
+                    &     (0.967)         &     (2.720)         &     (0.908)         &     (3.327)         &     (0.885)         &     (3.260)         \\
+\addlinespace
+\# Universities     &     0.00215         &      0.0244         &     0.00353         &       0.138\sym{*}  &     0.00695\sym{*}  &       0.156\sym{**} \\
+                    &   (0.00285)         &    (0.0255)         &   (0.00262)         &    (0.0688)         &   (0.00338)         &    (0.0508)         \\
+\addlinespace
+\# Tech Firms       &  0.00000113         &     0.00101         &  0.00000497         &    0.000548         & -0.00000503         &    0.000743         \\
+                    & (0.0000540)         &  (0.000883)         & (0.0000522)         &  (0.000575)         & (0.0000507)         &  (0.000516)         \\
+\addlinespace
+Constant            &       2.914         &       6.775\sym{**} &       2.826         &       4.681         &       1.618         &      -0.707         \\
+                    &     (2.023)         &     (2.242)         &     (1.995)         &     (4.415)         &     (2.167)         &     (6.644)         \\
+\midrule
+\(\rho\)            &                     &       0.844         &                     &       0.591         &                     &       0.287         \\
+\(\sigma\)          &                     &      0.0667         &                     &      0.0667         &                     &      0.0667         \\
+IV Controls         &         Yes         &         Yes         &         Yes         &         Yes         &         Yes         &         Yes         \\
+Observations        &         191         &         191         &         191         &         191         &         191         &         191         \\
+\bottomrule
+\multicolumn{7}{l}{\footnotesize Standard errors in parentheses}\\
+\multicolumn{7}{l}{\footnotesize \sym{*} \(p<0.05\), \sym{**} \(p<0.01\), \sym{***} \(p<0.001\)}\\
+\end{tabular}
+}

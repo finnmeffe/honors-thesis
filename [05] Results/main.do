@@ -1,5 +1,6 @@
 global path "C:\Users\phynm\OneDrive\Documents\GitHub\honors-thesis"
 global streams_dir "$path/[01] Streams/data"
+global incorp_dir "$path/[02] Incorporation Date/data"
 global frag_dir "$path/[03] Fragmentation/data"
 global agg_dir "$path/[04] Agglomeration/data" 
 global results_dir "$path/[05] Results"
@@ -83,6 +84,7 @@ label variable num_unis "\# Universities"
 label variable tech "\# Tech Firms"
 label variable creative "\# Creative Firms"
 
+
 // Quick visualizations
 /*
 preserve
@@ -91,7 +93,9 @@ twoway (scatter obs hhi_pop_muni) (lfit obs hhi_pop_muni)
 restore
 */
 
+////////////////////////////////////
 // 1SLS
+////////////////////////////////////
 
 preserve
 keep if r == 0 // remove duplicates
@@ -163,7 +167,9 @@ esttab m_* using "$results_dir/reg_figures/1sls_2.tex", ///
 
 restore
 
+////////////////////////////////////
 // OLS
+////////////////////////////////////
 
 local r_levels 250 500 1000
 local full_controls aland pop_muni share_bach_or_higher num_unis tech
@@ -388,11 +394,11 @@ eststo clear
 
 foreach lev of local r_levels {
 
-eststo m_lpm_`lev': quietly ivreghdfe gam_dummy (hhi_pop_muni = stream_length_meters) greatlake ocean sd_areatri aland pop_muni share_bach_or_higher num_unis tech if r == `lev', absorb(state_id) vce(cluster state_id)
+eststo m_lpm_`lev': quietly ivreghdfe gam_dummy (num_munis = stream_length_meters) greatlake ocean sd_areatri aland pop_muni share_bach_or_higher num_unis tech if r == `lev', absorb(state_id) vce(cluster state_id)
 estadd local statefe "Yes"
 estadd local ivcontrols "Yes"
 
-eststo m_pro_`lev': quietly ivprobit gam_dummy (hhi_pop_muni = stream_length_meters) greatlake ocean sd_areatri aland pop_muni share_bach_or_higher num_unis tech i.state_id if r == `lev', /// 
+eststo m_pro_`lev': quietly ivprobit gam_dummy (num_munis = stream_length_meters) greatlake ocean sd_areatri aland pop_muni share_bach_or_higher num_unis tech i.state_id if r == `lev', /// 
 vce(cluster state_id)
 estadd local statefe "Yes"
 estadd local ivcontrols "Yes"
@@ -403,4 +409,128 @@ estadd scalar sig = exp(_b[/lnsigma2])
 
 esttab m_*, se r2 drop(*.state_id _cons greatlake ocean sd_areatri aland pop_muni)
 
+* substitute counties for municipalities
 
+local r_levels 250 500 1000
+eststo clear
+
+foreach lev of local r_levels {
+
+eststo m_lpm_`lev': quietly ivreghdfe gam_dummy (num_counties = stream_length_meters) greatlake ocean sd_areatri aland pop_muni share_bach_or_higher num_unis tech if r == `lev', absorb(state_id) vce(cluster state_id)
+estadd local statefe "Yes"
+estadd local ivcontrols "Yes"
+
+eststo m_pro_`lev': quietly ivprobit gam_dummy (num_counties = stream_length_meters) greatlake ocean sd_areatri aland pop_muni share_bach_or_higher num_unis tech i.state_id if r == `lev', /// 
+vce(cluster state_id)
+estadd local statefe "Yes"
+estadd local ivcontrols "Yes"
+estadd scalar rho = tanh(_b[/athrho2_1])
+estadd scalar sig = exp(_b[/lnsigma2])
+	
+}
+
+esttab m_*, se r2 drop(*.state_id _cons greatlake ocean sd_areatri aland pop_muni)
+
+esttab m* using "$results_dir/reg_figures/2sls_full_counties.tex", ///
+	keep(main:) drop(*.state_id _cons greatlake ocean sd_areatri aland pop_muni) ///
+    se ///
+	r2 ///
+	label ///
+	mgroups("r = 250" "r = 500" "r = 1000", ///
+        pattern(1 0 1 0 1 0) ///
+        span ///
+        prefix(\multicolumn{@span}{c}{) ///
+        suffix(})) ///
+    stats(rho sig statefe ivcontrols N, ///
+		labels("\(\rho\)" "\(\sigma\)" "State FE" "IV Controls" "Observations")) ///
+    nomtitles ///
+	booktabs ///
+	replace 
+
+////////////////////////////////////
+// Incorp Year IV
+////////////////////////////////////
+
+// Add incorporation year/law data
+
+merge m:1 cbsacode using "$incorp_dir/muni_incorporation"
+drop if _merge != 3
+drop _merge
+
+label variable yr_incorp_av_all "Mean Year of Incorporation"
+label variable incorpreqdummy "Incorporation Requirements"
+
+preserve
+drop if r!= 0
+drop if yr_incorp_av_all < 1800
+*twoway (scatter index_circ yr_incorp_av_all) (lfit index_circ yr_incorp_av_all)
+
+eststo clear
+eststo m1: regress index_circ yr_incorp_av_all
+eststo m2: regress index_rect yr_incorp_av_all
+eststo m3: regress index_circ yr_incorp_av_all fullhomerule incorpreqdummy pop_muni aland sd_areatri
+eststo m4: regress index_rect yr_incorp_av_all fullhomerule incorpreqdummy pop_muni aland
+
+esttab m*, se r2
+restore
+
+local r_levels 250 500 1000
+eststo clear
+
+foreach lev of local r_levels {
+
+eststo m_lpm_`lev': quietly ivregress 2sls gam_dummy (index_circ = yr_incorp_av_all) fullhomerule incorpreqdummy pop_muni aland sd_areatri share_bach_or_higher num_unis tech if r == `lev', vce(robust) first
+estadd local ivcontrols "Yes"
+
+eststo m_pro_`lev': quietly ivprobit gam_dummy (index_circ = yr_incorp_av_all) fullhomerule incorpreqdummy pop_muni aland sd_areatri share_bach_or_higher num_unis tech if r == `lev'
+estadd local ivcontrols "Yes"
+estadd scalar rho = tanh(_b[/athrho2_1])
+estadd scalar sig = exp(_b[/lnsigma2])
+	
+}
+
+esttab m_*, se r2
+
+eststo clear
+
+preserve
+drop if r != 500
+eststo iv: regress index_circ yr_incorp_av_all fullhomerule incorpreqdummy aland sd_areatri pop_muni share_bach_or_higher num_unis tech
+eststo m: ivregress 2sls gam_dummy (index_circ = yr_incorp_av_all) fullhomerule incorpreqdummy pop_muni share_bach_or_higher num_unis tech aland sd_areatri, vce(robust) first
+estat firststage
+esttab iv m , se
+restore
+
+local r_levels 250 500 1000
+eststo clear
+
+foreach lev of local r_levels {
+
+eststo m_lpm_`lev': quietly ivreghdfe gam_dummy (index_circ = yr_incorp_av_all) fullhomerule incorpreqdummy aland sd_areatri pop_muni share_bach_or_higher num_unis tech if r == `lev', vce(robust)
+estadd local ivcontrols "Yes"
+
+eststo m_pro_`lev': quietly ivprobit gam_dummy (index_circ = yr_incorp_av_all) fullhomerule incorpreqdummy aland sd_areatri pop_muni share_bach_or_higher num_unis tech if r == `lev', /// 
+vce(robust)
+estadd local ivcontrols "Yes"
+estadd scalar rho = tanh(_b[/athrho2_1])
+estadd scalar sig = exp(_b[/lnsigma2])
+	
+}
+
+esttab m_*, se r2 drop(fullhomerule incorpreqdummy aland sd_areatri pop_muni)
+
+esttab m* using "$results_dir/reg_figures/2sls_incorp.tex", ///
+	keep(main:) drop(fullhomerule incorpreqdummy aland sd_areatri pop_muni) ///
+    se ///
+	r2 ///
+	label ///
+	mgroups("r = 250" "r = 500" "r = 1000", ///
+        pattern(1 0 1 0 1 0) ///
+        span ///
+        prefix(\multicolumn{@span}{c}{) ///
+        suffix(})) ///
+    stats(rho sig ivcontrols N, ///
+		labels("\(\rho\)" "\(\sigma\)" "IV Controls" "Observations")) ///
+    nomtitles ///
+	booktabs ///
+	replace 
