@@ -494,7 +494,7 @@ esttab m_*, se r2
 eststo clear
 
 preserve
-drop if r != 500
+drop if r != 0
 eststo iv: regress index_circ yr_incorp_av_all fullhomerule incorpreqdummy aland sd_areatri pop_muni share_bach_or_higher num_unis tech
 eststo m: ivregress 2sls gam_dummy (index_circ = yr_incorp_av_all) fullhomerule incorpreqdummy pop_muni share_bach_or_higher num_unis tech aland sd_areatri, vce(robust) first
 estat firststage
@@ -504,9 +504,15 @@ restore
 local r_levels 250 500 1000
 eststo clear
 
+preserve
+drop if r != 0
+drop if gam_dummy == .
+eststo iv: regress index_circ yr_incorp_av_all fullhomerule incorpreqdummy aland sd_areatri pop_muni share_bach_or_higher num_unis tech
+restore
+
 foreach lev of local r_levels {
 
-eststo m_lpm_`lev': quietly ivreghdfe gam_dummy (index_circ = yr_incorp_av_all) fullhomerule incorpreqdummy aland sd_areatri pop_muni share_bach_or_higher num_unis tech if r == `lev', vce(robust)
+eststo m_lpm_`lev': quietly ivregress 2sls gam_dummy (index_circ = yr_incorp_av_all) fullhomerule incorpreqdummy aland sd_areatri pop_muni share_bach_or_higher num_unis tech if r == `lev', vce(robust)
 estadd local ivcontrols "Yes"
 
 eststo m_pro_`lev': quietly ivprobit gam_dummy (index_circ = yr_incorp_av_all) fullhomerule incorpreqdummy aland sd_areatri pop_muni share_bach_or_higher num_unis tech if r == `lev', /// 
@@ -517,20 +523,20 @@ estadd scalar sig = exp(_b[/lnsigma2])
 	
 }
 
-esttab m_*, se r2 drop(fullhomerule incorpreqdummy aland sd_areatri pop_muni)
+esttab iv m_*, se r2 ///
+	keep(main: yr_incorp_av_all index_circ fullhomerule incorpreqdummy aland sd_areatri pop_muni share_bach_or_higher num_unis tech)
 
-esttab m* using "$results_dir/reg_figures/2sls_incorp.tex", ///
-	keep(main:) drop(fullhomerule incorpreqdummy aland sd_areatri pop_muni) ///
+esttab iv m* using "$results_dir/reg_figures/2sls_incorp.tex", ///
     se ///
 	r2 ///
 	label ///
-	mgroups("r = 250" "r = 500" "r = 1000", ///
-        pattern(1 0 1 0 1 0) ///
+	mgroups("1SLS" "r = 250" "r = 500" "r = 1000", ///
+        pattern(1 1 0 1 0 1 0) ///
         span ///
         prefix(\multicolumn{@span}{c}{) ///
         suffix(})) ///
-    stats(rho sig ivcontrols N, ///
-		labels("\(\rho\)" "\(\sigma\)" "IV Controls" "Observations")) ///
+    stats(rho sig N, ///
+		labels("\(\rho\)" "\(\sigma\)" "Observations")) ///
     nomtitles ///
 	booktabs ///
 	replace 
